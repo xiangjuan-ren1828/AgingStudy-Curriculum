@@ -44,7 +44,7 @@ yCir   = RChunk * sin(angCir) + centerY;
 
 expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
 nCond   = length(expList);
-expId   = expList{3};
+expId   = expList{1};
 if isequal(expId, 'interleaved')
     subjList_young = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
                       '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
@@ -219,8 +219,8 @@ for iGrp = 1 : nGroup
         imgEnd          =  imgSize_js * nTrans / 2;
         iX_vec          = 0 : (nTrans + nDtr - 1);
         imgDispX_global = (imgStart - imgSize_js) + ...
-            (imgEnd + imgSize_js - (imgStart - imgSize_js)) / nTrans .* iX_vec; % [1×6]
-        imgDispY_global = repmat(imgSize_js, 1, nTrans + nDtr);                 % [1×6], all 0.15
+                          (imgEnd + imgSize_js - (imgStart - imgSize_js)) / nTrans .* iX_vec; % [1×6]
+        imgDispY_global = repmat(imgSize_js, 1, nTrans + nDtr); % [1×6], all 0.15
 
         % ------ Locate episode-start rows (per-trial position data lives here) ------
         % trialNo is saved only in the episodeStart routine, once per formal trial.
@@ -238,9 +238,9 @@ for iGrp = 1 : nGroup
         mouse_both = computeDistToStim(mouse_both);
 
         % ------ Analyze mind-changing before each sequential choice ------
-        mouse_con  = analyzeChoiceHesitation(mouse_con,  seqMem_subj, 'con',  nTrans);
-        mouse_loc  = analyzeChoiceHesitation(mouse_loc,  seqMem_subj, 'loc',  nTrans);
-        mouse_both = analyzeChoiceHesitation(mouse_both, seqMem_subj, 'both', nTrans);
+        mouse_con  = analyzeChoiceHesitation(mouse_con,  seqMem_subj, 'con',  nTrans, nDtr);
+        mouse_loc  = analyzeChoiceHesitation(mouse_loc,  seqMem_subj, 'loc',  nTrans, nDtr);
+        mouse_both = analyzeChoiceHesitation(mouse_both, seqMem_subj, 'both', nTrans, nDtr);
 
         % Collect per-subject results
         all_mouse_con{iSub}  = mouse_con;
@@ -341,6 +341,392 @@ for iFig = 1 : 2
     sgtitle([plotSpec(iFig).title, ' — ', expId], 'FontSize', 13, 'FontWeight', 'bold');
 end
 
+%% Plot fraction of deliberation time closest to the chosen stimulus — YA vs OA
+% timeInChosen: fraction of the deliberation window (after cursor leaves the
+% previous stimulus) where the cursor is nearest to the eventually chosen stimulus.
+% timeInOther = 1 - timeInChosen is its complement and is not plotted separately.
+% Dashed grey line: 1/(nTrans+nDtr) = 1/6 chance level (uniform cursor wandering).
+
+chanceLvl = 1 / (nTrans + nDtr);   % = 1/6 ≈ 0.167
+
+figure('Name', 'Time closest to chosen stimulus', 'Color', 'w', ...
+       'Units', 'centimeters', 'Position', [2, 22, 24, 8]);
+
+for iCond = 1 : 3
+
+    ax = subplot(1, 3, iCond);
+    hold(ax, 'on');
+
+    % Chance reference
+    plot(ax, [0.5, nTrans+0.5], [chanceLvl, chanceLvl], '--', ...
+         'Color', [0.6 0.6 0.6], 'LineWidth', 1, 'HandleVisibility', 'off');
+
+    allGrpMeans_chosen = NaN(nGroup, nTrans);
+
+    for iGrp = 1 : nGroup
+
+        mouse_grp = dataVars{iCond}{iGrp};
+        nSub_plt  = numel(mouse_grp);
+        subChosen = NaN(nSub_plt, nTrans);
+
+        for iSub = 1 : nSub_plt
+            md = mouse_grp{iSub};
+            if isempty(md), continue; end
+
+            mc = vertcat(md.timeInChosen);
+            if isempty(mc), continue; end
+
+            subChosen(iSub, :) = mean(mc, 1, 'omitnan');
+        end
+
+        nValid     = sum(~isnan(subChosen(:, 1)));
+        meanChosen = mean(subChosen, 1, 'omitnan');
+        semChosen  = std(subChosen,  0, 1, 'omitnan') ./ sqrt(nValid);
+        allGrpMeans_chosen(iGrp, :) = meanChosen;
+
+        xPos = 1 : nTrans;
+        clr  = grpColors(iGrp, :);
+
+        xFill = [xPos, fliplr(xPos)];
+        fill(ax, xFill, [meanChosen+semChosen, fliplr(meanChosen-semChosen)], ...
+             clr, 'FaceAlpha', 0.15, 'EdgeColor', 'none', 'HandleVisibility', 'off');
+
+        plot(ax, xPos, meanChosen, '-o', 'Color', clr, 'LineWidth', 1.8, ...
+            'MarkerSize', 6, 'MarkerFaceColor', clr, 'DisplayName', grpLabels{iGrp});
+    end
+
+    xlabel(ax, 'Choice position');
+    if iCond == 1
+        ylabel(ax, 'Fraction of deliberation time (chosen)');
+    end
+    title(ax, condNames{iCond});
+    xlim(ax, [0.5, nTrans + 0.5]);
+    xticks(ax, 1 : nTrans);
+
+    yAll = allGrpMeans_chosen(~isnan(allGrpMeans_chosen));
+    if ~isempty(yAll)
+        yPad = max(0.1 * range([yAll; chanceLvl]), 0.02);
+        ylim(ax, [max(0, min([yAll; chanceLvl]) - yPad), ...
+                  min(1, max([yAll; chanceLvl]) + yPad)]);
+    end
+
+    set(ax, 'Box', 'off', 'FontSize', 11, 'TickDir', 'out');
+    if iCond == 3
+        legend(ax, grpLabels, 'Location', 'best', 'Box', 'off', 'FontSize', 10);
+    end
+end
+
+sgtitle(['Time closest to chosen stimulus — ', expId], ...
+        'FontSize', 13, 'FontWeight', 'bold');
+
+%% Accuracy-conditioned mind changes and dwell time — YA vs OA
+% For each retrieval trial, mindChanges and timeInChosen are averaged
+% separately over correct clicks and incorrect clicks (collapsed across
+% all nTrans transitions). This figure shows whether hesitation and
+% dwell-time differ between correct and incorrect choices.
+%
+% Layout: 2 rows (mindChanges | timeInChosen) × 3 cols (content | loc | both)
+% Each panel: 2 grouped bars [Correct, Incorrect] × [YA, OA]
+
+accFields  = {'mindChanges_corr', 'mindChanges_incorr'; ...
+              'timeInChosen_corr','timeInChosen_incorr'};
+rowLabels  = {'Mean # switches', 'Dwell time (chosen)'};
+accLabels  = {'Correct', 'Incorrect'};
+corrColors = [0 0 0; 0.6 0.6 0.6];   % correct=dark, incorrect=light
+
+figure('Name', 'Accuracy-conditioned hesitation', 'Color', 'w', ...
+       'Units', 'centimeters', 'Position', [28, 2, 24, 14]);
+
+for iRow = 1 : 2         % metric: mindChanges or timeInChosen
+    for iCond = 1 : 3    % condition: content / location / both
+
+        ax = subplot(2, 3, (iRow-1)*3 + iCond);
+        hold(ax, 'on');
+
+        % Aggregate: for each group, collect [nSub × 2] matrix (corr, incorr)
+        grpMeans = NaN(nGroup, 2);
+        grpSEMs  = NaN(nGroup, 2);
+        allSubVals = cell(nGroup, 2);
+
+        for iGrp = 1 : nGroup
+            mouse_grp = dataVars{iCond}{iGrp};
+            nSub_plt  = numel(mouse_grp);
+
+            subCorr   = NaN(nSub_plt, 1);
+            subIncorr = NaN(nSub_plt, 1);
+
+            for iSub = 1 : nSub_plt
+                md = mouse_grp{iSub};
+                if isempty(md), continue; end
+                subCorr(iSub)   = mean([md.(accFields{iRow,1})], 'omitnan');
+                subIncorr(iSub) = mean([md.(accFields{iRow,2})], 'omitnan');
+            end
+
+            nV = sum(~isnan(subCorr));
+            grpMeans(iGrp, :) = [mean(subCorr,'omitnan'),   mean(subIncorr,'omitnan')];
+            grpSEMs(iGrp, :)  = [std(subCorr,0,'omitnan'),  std(subIncorr,0,'omitnan')] ./ sqrt(nV);
+            allSubVals{iGrp,1} = subCorr;
+            allSubVals{iGrp,2} = subIncorr;
+        end
+
+        % Bar positions: [YA_corr, OA_corr, YA_incorr, OA_incorr]
+        xCorr   = [1, 1.45];   % YA and OA positions for correct
+        xIncorr = [2.3, 2.75]; % YA and OA positions for incorrect
+
+        xAll = [xCorr, xIncorr];
+        means_all = [grpMeans(1,1), grpMeans(2,1), grpMeans(1,2), grpMeans(2,2)];
+        sems_all  = [grpSEMs(1,1),  grpSEMs(2,1),  grpSEMs(1,2),  grpSEMs(2,2)];
+        colors_all = [grpColors(1,:); grpColors(2,:); grpColors(1,:); grpColors(2,:)];
+        alpha_all  = [1, 1, 0.45, 0.45];  % correct=solid, incorrect=faded
+
+        for ib = 1 : 4
+            bar(ax, xAll(ib), means_all(ib), 0.38, ...
+                'FaceColor', colors_all(ib,:), 'FaceAlpha', alpha_all(ib), ...
+                'EdgeColor', 'none', 'HandleVisibility', 'off');
+            errorbar(ax, xAll(ib), means_all(ib), sems_all(ib), ...
+                'k', 'LineWidth', 1.2, 'CapSize', 4, 'HandleVisibility', 'off');
+        end
+
+        % Individual subject dots (jittered)
+        rng(0);
+        subXAll   = {allSubVals{1,1}, allSubVals{2,1}, allSubVals{1,2}, allSubVals{2,2}};
+        for ib = 1 : 4
+            vals = subXAll{ib};
+            vals = vals(~isnan(vals));
+            scatter(ax, xAll(ib) + (rand(size(vals))-0.5)*0.15, vals, 18, ...
+                colors_all(ib,:), 'filled', 'MarkerFaceAlpha', 0.4, ...
+                'HandleVisibility', 'off');
+        end
+
+        % Legend proxy patches (only on last panel)
+        if iCond == 3 && iRow == 1
+            patch(ax, NaN, NaN, grpColors(1,:), 'DisplayName', grpLabels{1}, 'EdgeColor','none');
+            patch(ax, NaN, NaN, grpColors(2,:), 'DisplayName', grpLabels{2}, 'EdgeColor','none');
+            legend(ax, 'Location', 'best', 'Box', 'off', 'FontSize', 9);
+        end
+
+        % Axis decoration
+        set(ax, 'XTick', [mean(xCorr), mean(xIncorr)], ...
+                'XTickLabel', accLabels, 'Box', 'off', ...
+                'FontSize', 10, 'TickDir', 'out');
+        xlim(ax, [0.6, 3.15]);
+        if iCond == 1, ylabel(ax, rowLabels{iRow}); end
+        if iRow == 1,  title(ax, condNames{iCond}); end
+
+        yAll = means_all(~isnan(means_all));
+        if ~isempty(yAll)
+            yPad = max(0.15 * range(yAll), 0.02);
+            ylim(ax, [max(0, min(yAll) - yPad), max(yAll) + yPad]);
+        end
+    end
+end
+
+sgtitle(['Correct vs incorrect — ', expId], 'FontSize', 13, 'FontWeight', 'bold');
+
+
+%% Example participant: mouse trajectory and distance to stimuli over time
+% Fig 5 — x-y trajectory colored by time (cool colormap); stimuli/slots as squares
+% Fig 6 — distance to each stimulus/slot over time; one colored line per stimulus
+%
+% Example trial selection: first YA subject that has valid trajectory + distance
+% data for all three retrieval conditions; first valid trial per condition.
+
+imgSize_plot = 0.15;   % image width in PsychoJS normalized units
+sqHW         = imgSize_plot / 2;   % half-width for drawn squares
+
+% ---- Select example participant and trial (edit these four lines) ----
+% exGrp: 1 = younger adults, 2 = older adults
+% exSub: subject index within the group (1-based)
+% exTrial*: trial index for each retrieval type (1-based); set to 0 to
+%           auto-pick the first valid trial for that condition
+exGrp       = 2;
+exSub       = 5;
+exTrialCon  = 0;
+exTrialLoc  = 0;
+exTrialBoth = 0;
+
+% Auto-pick first valid trial for any condition left at 0
+md_c = all_mouse_con_grp{exGrp}{exSub};
+md_l = all_mouse_loc_grp{exGrp}{exSub};
+md_b = all_mouse_both_grp{exGrp}{exSub};
+if exTrialCon  == 0
+    exTrialCon  = find(~cellfun(@isempty, {md_c.trajectory}) & ...
+                       ~cellfun(@isempty, {md_c.distToStim}), 1);
+end
+if exTrialLoc  == 0
+    exTrialLoc  = find(~cellfun(@isempty, {md_l.trajectory}) & ...
+                       ~cellfun(@isempty, {md_l.distToStim}), 1);
+end
+if exTrialBoth == 0
+    exTrialBoth = find(~cellfun(@isempty, {md_b.trajectory}) & ...
+                       ~cellfun(@isempty, {md_b.distToSlot}), 1);
+end
+
+if isempty(exTrialCon) || isempty(exTrialLoc) || isempty(exTrialBoth)
+    warning('No valid trial found for one or more conditions (grp=%d, sub=%d); skipping trajectory figures.', exGrp, exSub);
+else
+    exData = { all_mouse_con_grp{exGrp}{exSub}(exTrialCon), ...
+               all_mouse_loc_grp{exGrp}{exSub}(exTrialLoc), ...
+               all_mouse_both_grp{exGrp}{exSub}(exTrialBoth) };
+    % For 'both', analysis uses distance to target slots; con/loc use distToStim
+    distFieldEx = {'distToStim', 'distToStim', 'distToSlot'};
+
+    nStim    = nTrans + nDtr;          % 6
+    stimCmap = lines(nStim);           % 6 distinct colors, one per stimulus/slot
+
+    %% Figure 5 — Mouse trajectory colored by time
+    figure('Name', 'Example trajectory', 'Color', 'w', ...
+           'Units', 'centimeters', 'Position', [2, 2, 26, 9]);
+
+    for iCond = 1 : 3
+        ax = subplot(1, 3, iCond);
+        hold(ax, 'on');
+
+        md   = exData{iCond};
+        traj = md.trajectory;   % [nT×3]: x, y, t
+
+        if isempty(traj)
+            title(ax, condNames{iCond}); continue;
+        end
+
+        xT    = traj(:, 1);
+        yT    = traj(:, 2);
+        tT    = traj(:, 3);
+        tNorm = (tT - tT(1)) / max(tT(end) - tT(1), eps);
+
+        % Trajectory points colored by normalized time (early=blue, late=red)
+        scatter(ax, xT, yT, 10, tNorm, 'filled', 'MarkerFaceAlpha', 0.8);
+        colormap(ax, 'cool');
+        cb = colorbar(ax);
+        cb.Label.String = 'Time (norm.)';
+        caxis(ax, [0, 1]);
+
+        % Draw stimulus positions as colored squares (solid border)
+        stimX   = md.stimX;
+        stimY   = md.stimY;
+        trueOrd = md.trueOrder;   % [1×6]: true click order per slot; nTrans+1 = distractor
+        if ~isempty(stimX)
+            for iS = 1 : length(stimX)
+                rectangle(ax, 'Position', ...
+                    [stimX(iS)-sqHW, stimY(iS)-sqHW, 2*sqHW, 2*sqHW], ...
+                    'EdgeColor', stimCmap(iS,:), 'LineWidth', 2, 'FaceColor', 'none');
+                if ~isempty(trueOrd) && iS <= length(trueOrd)
+                    tOrdVal = trueOrd(iS);
+                    if tOrdVal == nTrans + nDtr
+                        lbl = 'dtr';
+                    else
+                        lbl = num2str(tOrdVal);
+                    end
+                else
+                    lbl = num2str(iS);
+                end
+                text(ax, stimX(iS), stimY(iS) - sqHW - 0.02, lbl, ...
+                    'Color', stimCmap(iS,:), 'FontSize', 9, 'FontWeight', 'bold', ...
+                    'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
+                    'BackgroundColor', 'w', 'Margin', 1);
+            end
+        end
+
+        % For 'both': also draw target slot positions as dashed squares
+        if iCond == 3 && ~isempty(md.slotX)
+            for iS = 1 : length(md.slotX)
+                rectangle(ax, 'Position', ...
+                    [md.slotX(iS)-sqHW, md.slotY(iS)-sqHW, 2*sqHW, 2*sqHW], ...
+                    'EdgeColor', stimCmap(iS,:), 'LineWidth', 1.5, ...
+                    'FaceColor', 'none', 'LineStyle', '--');
+            end
+        end
+
+        % Mark click moments with downward triangles; label by click order
+        clickT = md.clickTimes;
+        if ~isempty(clickT)
+            for iK = 1 : length(clickT)
+                [~, tidx] = min(abs(tT - clickT(iK)));
+                plot(ax, xT(tidx), yT(tidx), 'v', ...
+                    'Color', 'k', 'MarkerSize', 8, 'MarkerFaceColor', 'k');
+            end
+        end
+
+        xlabel(ax, 'x (norm.)');
+        if iCond == 1, ylabel(ax, 'y (norm.)'); end
+        title(ax, condNames{iCond}, 'FontSize', 11);
+        axis(ax, 'equal');
+        set(ax, 'Box', 'off', 'FontSize', 11, 'TickDir', 'out');
+    end
+
+    sgtitle(sprintf('Mouse trajectory — YA sub %d, trial %d/%d/%d — %s', ...
+                    exSub, exTrialCon, exTrialLoc, exTrialBoth, expId), ...
+            'FontSize', 12, 'FontWeight', 'bold');
+
+    %% Figure 6 — Distance to each stimulus/slot over time
+    % Each colored line = distance from mouse to one stimulus (col index = stim ID).
+    % For the 'both' condition distances are to the target slots (distToSlot),
+    % matching the metric used in the hesitation analysis.
+    % Dashed vertical lines mark click times; 'C1'–'C5' labels each click.
+
+    figure('Name', 'Distance to stimuli over time', 'Color', 'w', ...
+           'Units', 'centimeters', 'Position', [2, 14, 26, 9]);
+
+    for iCond = 1 : 3
+        ax = subplot(1, 3, iCond);
+        hold(ax, 'on');
+
+        md      = exData{iCond};
+        traj    = md.trajectory;
+        distMat = md.(distFieldEx{iCond});   % [nT×6]
+
+        if isempty(traj) || isempty(distMat)
+            title(ax, condNames{iCond}); continue;
+        end
+
+        tT   = traj(:, 3);
+        tOff = (tT - tT(1)) / max(tT(end) - tT(1), eps);   % normalized 0–1
+
+        % Distance to each stimulus as a separate line, labeled by true order
+        trueOrd = md.trueOrder;   % [1×6]: true click order per slot; nTrans+1 = distractor
+        for iS = 1 : size(distMat, 2)
+            if ~isempty(trueOrd) && iS <= length(trueOrd)
+                tOrdVal = trueOrd(iS);
+                if tOrdVal == nTrans + nDtr
+                    legLabel = sprintf('S%d (dtr)', iS);
+                else
+                    legLabel = sprintf('S%d (true=%d)', iS, tOrdVal);
+                end
+            else
+                legLabel = ['S', num2str(iS)];
+            end
+            plot(ax, tOff, distMat(:, iS), '-', ...
+                'Color', stimCmap(iS,:), 'LineWidth', 1.3, ...
+                'DisplayName', legLabel);
+        end
+
+        % Vertical dashed lines at click times
+        clickT = md.clickTimes;
+        yTop   = max(distMat(:)) * 1.1;
+        if ~isempty(clickT)
+            for iK = 1 : length(clickT)
+                tClick = (clickT(iK) - tT(1)) / max(tT(end) - tT(1), eps);
+                plot(ax, [tClick, tClick], [0, yTop], '--k', ...
+                    'LineWidth', 0.8, 'HandleVisibility', 'off');
+                text(ax, tClick, yTop * 0.96, ['C', num2str(iK)], ...
+                    'FontSize', 7, 'HorizontalAlignment', 'center', 'Color', 'k');
+            end
+        end
+
+        xlabel(ax, 'Time (norm.)');
+        if iCond == 1, ylabel(ax, 'Distance (norm. units)'); end
+        title(ax, condNames{iCond}, 'FontSize', 11);
+        ylim(ax, [0, yTop]);
+        set(ax, 'Box', 'off', 'FontSize', 11, 'TickDir', 'out');
+        legend(ax, 'Location', 'northeast', 'Box', 'off', 'FontSize', 8);
+    end
+
+    sgtitle(sprintf('Distance to stimuli — YA sub %d, trial %d/%d/%d — %s', ...
+                    exSub, exTrialCon, exTrialLoc, exTrialBoth, expId), ...
+            'FontSize', 12, 'FontWeight', 'bold');
+end
+
+
 %% ------ Define the function ------
 function mouse_data = extractMouseClosestToReport(seqMem_subj, xName, yName, tName, reportName)
 
@@ -366,9 +752,9 @@ function mouse_data = extractMouseClosestToReport(seqMem_subj, xName, yName, tNa
         'trajectory', cell(nTrial,1) ...
     );
 
-    for iRep = 1:nTrial
+    for iRep = 1 : nTrial
 
-        reportRow = valid_report_rows(iRep);
+        reportRow  = valid_report_rows(iRep);
         report_str = report_col(reportRow);
 
         mouse_data(iRep).rowReport  = reportRow;
@@ -548,7 +934,7 @@ function mouse_data = computeDistToStim(mouse_data)
 
 for iRep = 1 : length(mouse_data)
 
-    mouse_data(iRep).distToStim = [];
+    mouse_data(iRep).distToStim = []; % Object retrieval 
     mouse_data(iRep).distToSlot = [];
 
     traj  = mouse_data(iRep).trajectory;
@@ -579,44 +965,62 @@ end
 end
 
 
-function mouse_data = analyzeChoiceHesitation(mouse_data, seqMem_subj, reportType, nTrans)
+function mouse_data = analyzeChoiceHesitation(mouse_data, seqMem_subj, reportType, nTrans, nDtr)
 % For each retrieval trial, segment the mouse trajectory by click time,
 % find which stimulus/slot was closest (argmin distToStim or distToSlot)
 % at each sample within that segment, and count how many times the
 % closest-stimulus identity switches before the participant's click.
 %
-% Adds fields to each struct element:
-%   .chosenSlots    [nTrans×1]  — 1-based stimulus indices in click order
-%   .clickTimes     [nTrans×1]  — RT (ms) for each of the nTrans choices
-%   .mindChanges    [1×nTrans]  — # identity switches per choice window
-%   .mindChanged    [1×nTrans]  — binary: any switch in window (0/1)
-%   .timeInChosen   [1×nTrans]  — fraction of window spent closest to chosen stim
-%   .closestAtClick [1×nTrans]  — closest stim index at the moment of click
+% Per-click fields [1×nTrans]:
+%   .chosenSlots    — 1-based stimulus indices in click order
+%   .clickTimes     — RT (s) for each of the nTrans choices
+%   .isCorrect      — 1 if click matched true sequence order, 0 if not, NaN if unknown
+%   .mindChanges    — # closest-stimulus identity switches per deliberation window
+%   .mindChanged    — binary: any switch (0/1)
+%   .timeInChosen   — time-weighted fraction of deliberation time closest to chosen stim
+%   .timeInOther    — 1 - timeInChosen
+%   .closestAtClick — closest stim index at moment of click
+%
+% Accuracy-conditioned scalars (collapsed across all transitions per trial):
+%   .mindChanges_corr    — mean mindChanges over correct clicks
+%   .mindChanges_incorr  — mean mindChanges over incorrect clicks
+%   .timeInChosen_corr   — mean timeInChosen over correct clicks
+%   .timeInChosen_incorr — mean timeInChosen over incorrect clicks
 
 switch reportType
     case 'con'
-        ordColName = 'conReportOrd';
-        rtsColName = 'conRTs';
-        distField  = 'distToStim';
+        ordColName  = 'conReportOrd';
+        rtsColName  = 'conRTs';
+        trueColName = 'conReportTrue';
+        distField   = 'distToStim';
     case 'loc'
-        ordColName = 'locReportOrd';
-        rtsColName = 'locRTs';
-        distField  = 'distToStim';
+        ordColName  = 'locReportOrd';
+        rtsColName  = 'locRTs';
+        trueColName = 'locReportTrue';
+        distField   = 'distToStim';
     case 'both'
-        ordColName = 'bothReportOrd';
-        rtsColName = 'bothRTs';
-        distField  = 'distToSlot';
+        ordColName  = 'bothReportOrd';
+        rtsColName  = 'bothRTs';
+        trueColName = 'bothReportTrue';
+        distField   = 'distToSlot';
 end
 
 for iRep = 1 : length(mouse_data)
 
     % Default empty outputs
-    mouse_data(iRep).chosenSlots    = [];
-    mouse_data(iRep).clickTimes     = [];
-    mouse_data(iRep).mindChanges    = [];
-    mouse_data(iRep).mindChanged    = [];
-    mouse_data(iRep).timeInChosen   = [];
-    mouse_data(iRep).closestAtClick = [];
+    mouse_data(iRep).chosenSlots         = [];
+    mouse_data(iRep).clickTimes          = [];
+    mouse_data(iRep).isCorrect           = [];
+    mouse_data(iRep).mindChanges         = [];
+    mouse_data(iRep).mindChanged         = [];
+    mouse_data(iRep).timeInChosen        = [];
+    mouse_data(iRep).timeInOther         = [];
+    mouse_data(iRep).closestAtClick      = [];
+    mouse_data(iRep).mindChanges_corr    = NaN;
+    mouse_data(iRep).mindChanges_incorr  = NaN;
+    mouse_data(iRep).timeInChosen_corr   = NaN;
+    mouse_data(iRep).timeInChosen_incorr = NaN;
+    mouse_data(iRep).trueOrder           = [];   % [1×(nTrans+nDtr)] true order per slot
 
     traj      = mouse_data(iRep).trajectory;
     distMat   = mouse_data(iRep).(distField);
@@ -632,14 +1036,15 @@ for iRep = 1 : length(mouse_data)
     allNums = parseMouseArray(ordStr);
     repRTs  = parseMouseArray(rtsStr);
 
+    mat = [];   % [nSlot×2] for 'both': col1=content order, col2=location order
     if strcmp(reportType, 'both')
         % bothReportOrd is a flattened [6×2] JS array (12 numbers).
-        % reshape(., 2, 6)' → [6×2]; column 2 (1-based) = click sequence order per slot.
+        % reshape(., 2, 6)' → [6×2]: col1=content order, col2=location order per slot.
         if length(allNums) ~= 12
             continue;
         end
         mat    = reshape(allNums, 2, 6)';  % [6×2]
-        repOrd = mat(:, 2)';               % [1×6]: click order for each slot
+        repOrd = mat(:, 2)';               % [1×6]: location click order per slot
     else
         repOrd = allNums;
     end
@@ -658,11 +1063,44 @@ for iRep = 1 : length(mouse_data)
     chosenSlots = slotIdx(validMask)';   % [nTrans×1], 1-based stimulus indices
     clickTimes  = repRTs(chosenSlots);   % [nTrans×1], RTs in click order
 
+    % Determine per-click correctness.
+    % con/loc: click k correct iff trueNums(chosen slot) == k
+    %          (distractor has trueNums = nTrans+1, never equals k=1..nTrans)
+    % both: requires BOTH content AND location correct simultaneously:
+    %          content: mat(s,1) == s  [content order at slot s equals slot index]
+    %          location: s == k        [the slot dropped at position k equals slot index]
+    %          (mirrors: bothRep_i(1,j)==j && bothRep_i(2,j)==j in the summary script)
+    trueStr  = seqMem_subj.(trueColName)(reportRow);
+    trueNums = parseMouseArray(trueStr);
+    if length(trueNums) == nTrans + nDtr
+        mouse_data(iRep).trueOrder = trueNums(:)';
+    end
+    isCorrect = NaN(1, nTrans);
+    if length(trueNums) == nTrans + nDtr
+        switch reportType
+            case {'con', 'loc'}
+                for k = 1 : nTrans
+                    s = chosenSlots(k);
+                    isCorrect(k) = double(trueNums(s) == k);
+                end
+            case 'both'
+                for k = 1 : nTrans
+                    s = chosenSlots(k);
+                    if s >= 1 && s <= size(mat, 1)
+                        conCorrect = (mat(s, 1) == s);
+                        locCorrect = (s == k);
+                        isCorrect(k) = double(conCorrect && locCorrect);
+                    end
+                end
+        end
+    end
+
     tAxis = traj(:, 3);  % time column of trajectory
 
     mindChanges    = NaN(1, nTrans);
     mindChanged    = NaN(1, nTrans);
     timeInChosen   = NaN(1, nTrans);
+    timeInOther    = NaN(1, nTrans);
     closestAtClick = NaN(1, nTrans);
 
     for iChoice = 1 : nTrans
@@ -677,22 +1115,75 @@ for iRep = 1 : length(mouse_data)
             continue;
         end
 
+        tSeg    = tAxis(segMask);                 % [nSamp × 1] sample timestamps
         distSeg = distMat(segMask, :);            % [nSamp × nStim]
         [~, closestIdx] = min(distSeg, [], 2);    % [nSamp × 1]
+
+        % For choices after the first: the cursor may linger on the just-clicked
+        % stimulus at the start of the window (inertia, not deliberation).
+        % Trim the leading portion where the previously chosen stimulus is still
+        % closest — deliberation about the next choice only begins once the
+        % cursor leaves that territory.
+        if iChoice > 1
+            prevChosen = chosenSlots(iChoice - 1);
+            leftPrev   = find(closestIdx ~= prevChosen, 1, 'first');
+            if isempty(leftPrev)
+                % Cursor never left previous stimulus → nothing to analyse
+                continue;
+            end
+            closestIdx = closestIdx(leftPrev : end);
+            tSeg       = tSeg(leftPrev : end);
+        end
+
+        if length(closestIdx) < 2
+            continue;
+        end
+
+        % Time-weighted metrics: each sample k "owns" the interval [tSeg(k), tSeg(k+1)].
+        % dt(k) is that interval's duration; closestIdx(k) is the nearest stimulus
+        % throughout it. This accounts for variable frame rates across samples.
+        dt       = diff(tSeg);                              % [nSamp-1 × 1]
+        totalT   = sum(dt);
+        isChosen = closestIdx(1:end-1) == chosenSlots(iChoice);
 
         nChanges = sum(diff(closestIdx) ~= 0);
         mindChanges(iChoice)    = nChanges;
         mindChanged(iChoice)    = double(nChanges > 0);
-        timeInChosen(iChoice)   = mean(closestIdx == chosenSlots(iChoice));
+        timeInChosen(iChoice)   = sum(dt(isChosen)) / totalT;
+        timeInOther(iChoice)    = 1 - timeInChosen(iChoice);
         closestAtClick(iChoice) = closestIdx(end);
     end
 
-    mouse_data(iRep).chosenSlots    = chosenSlots;
-    mouse_data(iRep).clickTimes     = clickTimes;
-    mouse_data(iRep).mindChanges    = mindChanges;
-    mouse_data(iRep).mindChanged    = mindChanged;
-    mouse_data(iRep).timeInChosen   = timeInChosen;
-    mouse_data(iRep).closestAtClick = closestAtClick;
+    % Accuracy-conditioned collapsed metrics (mean across transitions per trial).
+    % NaN clicks (insufficient trajectory samples) and unknown-correctness clicks
+    % (NaN isCorrect) are excluded. NaN == x is always false in MATLAB, so
+    % corrMask / incorrMask naturally exclude those positions.
+    corrMask   = (isCorrect == 1) & ~isnan(mindChanges);
+    incorrMask = (isCorrect == 0) & ~isnan(mindChanges);
+    corrMaskT  = (isCorrect == 1) & ~isnan(timeInChosen);
+    incorrMaskT= (isCorrect == 0) & ~isnan(timeInChosen);
+
+    mindChanges_corr    = NaN;
+    mindChanges_incorr  = NaN;
+    timeInChosen_corr   = NaN;
+    timeInChosen_incorr = NaN;
+    if any(corrMask),    mindChanges_corr    = mean(mindChanges(corrMask));    end
+    if any(incorrMask),  mindChanges_incorr  = mean(mindChanges(incorrMask));  end
+    if any(corrMaskT),   timeInChosen_corr   = mean(timeInChosen(corrMaskT));  end
+    if any(incorrMaskT), timeInChosen_incorr = mean(timeInChosen(incorrMaskT));end
+
+    mouse_data(iRep).chosenSlots         = chosenSlots;
+    mouse_data(iRep).clickTimes          = clickTimes;
+    mouse_data(iRep).isCorrect           = isCorrect;
+    mouse_data(iRep).mindChanges         = mindChanges;
+    mouse_data(iRep).mindChanged         = mindChanged;
+    mouse_data(iRep).timeInChosen        = timeInChosen;
+    mouse_data(iRep).timeInOther         = timeInOther;
+    mouse_data(iRep).closestAtClick      = closestAtClick;
+    mouse_data(iRep).mindChanges_corr    = mindChanges_corr;
+    mouse_data(iRep).mindChanges_incorr  = mindChanges_incorr;
+    mouse_data(iRep).timeInChosen_corr   = timeInChosen_corr;
+    mouse_data(iRep).timeInChosen_incorr = timeInChosen_incorr;
 end
 end
 
