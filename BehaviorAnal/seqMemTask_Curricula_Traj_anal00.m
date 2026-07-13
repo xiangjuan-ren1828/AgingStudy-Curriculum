@@ -252,179 +252,6 @@ for iGrp = 1 : nGroup
     all_mouse_loc_grp{iGrp}  = all_mouse_loc;
     all_mouse_both_grp{iGrp} = all_mouse_both;
 end
-%% save the trajectory data for subsequent statistical test prepration
-% save([CLdata_folder, 'all_mouse_con_grp_YAOA_', suffixWord, '.mat'], 'all_mouse_con_grp');
-% save([CLdata_folder, 'all_mouse_loc_grp_YAOA_', suffixWord, '.mat'], 'all_mouse_loc_grp');
-% save([CLdata_folder, 'all_mouse_both_grp_YAOA_', suffixWord, '.mat'], 'all_mouse_both_grp');
-
-%% Prepare data for subsequent statistical tests
-% only for the average metric per trial
-condsList = {'interleaved', 'contentBlocked', 'positionBlocked'};
-trajCell_allConds = [];
-for iConds = 1 : length(condsList)
-    conds_ii = condsList{iConds};
-    % ------ content ------
-    load([CLdata_folder, 'all_mouse_con_grp_YAOA_', conds_ii, '.mat']);
-    all_mouse_con_iConds  = all_mouse_con_grp;
-    % ------ location ------
-    load([CLdata_folder, 'all_mouse_loc_grp_YAOA_', conds_ii, '.mat']);
-    all_mouse_loc_iConds  = all_mouse_loc_grp;
-    % ------ both ------
-    load([CLdata_folder, 'all_mouse_both_grp_YAOA_', conds_ii, '.mat']);
-    all_mouse_both_iConds = all_mouse_both_grp;
-
-    % ------ Reorganize data ------
-    for iGrp = 1 : nGroup
-        % ------ content ------
-        all_mouse_con_iGrp  = all_mouse_con_iConds{iGrp};
-        % ------ location ------
-        all_mouse_loc_iGrp  = all_mouse_loc_iConds{iGrp};
-        % ------ both ------
-        all_mouse_both_iGrp = all_mouse_both_iConds{iGrp};
-        subLen_iConds = length(all_mouse_con_iGrp);
-        for iSub = 1 : subLen_iConds
-            all_mouse_con_iSub  = all_mouse_con_iGrp{iSub}; % a structure
-            all_mouse_loc_iSub  = all_mouse_loc_iGrp{iSub}; 
-            all_mouse_both_iSub = all_mouse_both_iGrp{iSub};  
-
-            trajMetrics_con  = nan(size(all_mouse_con_iSub, 1), 2 * 3); % 2: correct vs. incorrect; 3: three types of trajectory-related metrics
-            trajMetrics_loc  = nan(size(all_mouse_con_iSub, 1), 2 * 3); 
-            trajMetrics_both = nan(size(all_mouse_con_iSub, 1), 2 * 3); % not include the post-test trials
-            % -- concatenate the correct and incorrect responses of the trajectory-related metrics --
-            for iTrl = 1 : size(all_mouse_con_iSub, 1) % only the learning-retrieval trials
-                % ---- object retrieval ----
-                trajMetrics_con(iTrl, :) = [all_mouse_con_iSub(iTrl).interClickTime_corr, ...
-                                            all_mouse_con_iSub(iTrl).interClickTime_incorr, ...
-                                            all_mouse_con_iSub(iTrl).selSpeed_corr, ...
-                                            all_mouse_con_iSub(iTrl).selSpeed_incorr, ...
-                                            all_mouse_con_iSub(iTrl).dwellTime_corr, ...
-                                            all_mouse_con_iSub(iTrl).dwellTime_incorr];
-                % ---- location retrieval ----
-                trajMetrics_loc(iTrl, :) = [all_mouse_loc_iSub(iTrl).interClickTime_corr, ...
-                                            all_mouse_loc_iSub(iTrl).interClickTime_incorr, ...
-                                            all_mouse_loc_iSub(iTrl).selSpeed_corr, ...
-                                            all_mouse_loc_iSub(iTrl).selSpeed_incorr, ...
-                                            all_mouse_loc_iSub(iTrl).dwellTime_corr, ...
-                                            all_mouse_loc_iSub(iTrl).dwellTime_incorr];
-
-                % ---- full retrieval ----
-                trajMetrics_both(iTrl, :) = [all_mouse_both_iSub(iTrl).interClickTime_corr, ...
-                                             all_mouse_both_iSub(iTrl).interClickTime_incorr, ...
-                                             all_mouse_both_iSub(iTrl).selSpeed_corr, ...
-                                             all_mouse_both_iSub(iTrl).selSpeed_incorr, ...
-                                             all_mouse_both_iSub(iTrl).dwellTime_corr, ...
-                                             all_mouse_both_iSub(iTrl).dwellTime_incorr];
-
-            end
-            trajMetrics_col = [reshape(trajMetrics_con, size(trajMetrics_con, 1) * size(trajMetrics_con, 2), 1); ...
-                               reshape(trajMetrics_loc, size(trajMetrics_loc, 1) * size(trajMetrics_loc, 2), 1); ...
-                               reshape(trajMetrics_both, size(trajMetrics_both, 1) * size(trajMetrics_both, 2), 1)];
-
-            % -- conditions --
-            iConds_col = repmat(iConds, length(trajMetrics_col), 1);
-
-            % -- age group --
-            iGrp_col   = repmat(iGrp, length(trajMetrics_col), 1); % 1-YA; 2-OA
-
-            % -- subj --
-            iSub_col   = repmat(iSub, length(trajMetrics_col), 1);
-
-            % -- trial labels --
-            trial_idx  = (1 : 1 : size(all_mouse_con_iSub, 1))';
-            trial_col  = repmat(trial_idx, 2 * 3 * 3, 1); % the 2nd 3: object/location/full retrieval
-
-            % -- retrieval types: object/location/full --
-            object_col    = ones(size(all_mouse_con_iSub, 1) * 2 * 3, 1);
-            location_col  = repmat(2, size(all_mouse_con_iSub, 1) * 2 * 3, 1);
-            full_col      = repmat(3, size(all_mouse_con_iSub, 1) * 2 * 3, 1);
-            retrieval_col = [object_col; location_col; full_col];
-
-            % -- trajectory-related confidence metrics labels --
-            interclick_col  = ones(size(all_mouse_con_iSub, 1) * 2, 1); % 2: correct and incorrect
-            seletionSpd_col = repmat(2, size(all_mouse_con_iSub, 1) * 2, 1);
-            dwellTime_col   = repmat(3, size(all_mouse_con_iSub, 1) * 2, 1);
-            trajMet_label_col = repmat([interclick_col; seletionSpd_col; dwellTime_col], ...
-                                        3, 1); % 3: retrieval types - object/location/full
-
-            % -- correct or incorrect response labels --
-            cor_incor_col = repmat([ones(size(all_mouse_con_iSub, 1), 1); zeros(size(all_mouse_con_iSub, 1), 1)], ...
-                                   3 * 3, 1); % 1-correct; 0-incorrect
-
-            trajCell_allConds = [trajCell_allConds; ...
-                                 iConds_col, iGrp_col, iSub_col, trial_col, ...
-                                 retrieval_col, cor_incor_col, ...
-                                 trajMet_label_col, trajMetrics_col];
-        end
-    end
-end
-%% ------ save the trajectory data for subsequent statistical tests ------
-save([CLdata_folder, 'trajCell_allConds_YAOA.mat'], 'trajCell_allConds');
-
-%% Consistency check: trajectory-inferred pick-up vs response data (Full report)
-% Prints a per-group summary table and plots match rate by sequential position.
-% The consistency figure now shows pick-up detection rate (how often participants' cursor passes through the inner zone before each drag), 
-% which is actually more scientifically useful than the broken image-identity cross-check. 
-% A rate well below 100% at a particular position would indicate the participant sometimes dragged without hovering at an inner image first.
-
-fprintf('\n--- Pick-up consistency check (both report) ---\n');
-fprintf('%-12s  %6s  %6s  %6s  %7s\n', 'Group', 'nChoi', 'Match', 'Mismatch', 'Rate(%)');
-fprintf('%s\n', repmat('-', 1, 48));
-
-% Build group name list from the same logic used in the data-loading loop.
-grpNames = cell(1, nGroup);
-for iGrp = 1 : nGroup
-    if iGrp == 1, grpNames{iGrp} = 'younger';
-    else,         grpNames{iGrp} = 'older';
-    end
-end
-
-consistByPos = NaN(nGroup, nTrans);   % mean match rate per group per position
-
-for iGrp = 1 : nGroup
-    allC = [];   % all pickupConsistent values pooled across subjects/trials/positions
-    posC = NaN(0, nTrans);
-
-    for iSub = 1 : length(all_mouse_both_grp{iGrp})
-        md = all_mouse_both_grp{iGrp}{iSub};
-        for iRep = 1 : length(md)
-            c = md(iRep).pickupConsistent;   % [1×nTrans] or empty
-            if isempty(c), continue; end
-            allC   = [allC, c(:)'];
-            posC   = [posC; c(:)'];
-        end
-    end
-
-    nTotal    = sum(~isnan(allC));
-    nMatch    = sum(allC == 1, 'omitnan');
-    nMismatch = sum(allC == 0, 'omitnan');
-    rate      = 100 * nMatch / max(nTotal, 1);
-    fprintf('%-12s  %6d  %6d  %8d  %6.1f\n', grpNames{iGrp}, nTotal, nMatch, nMismatch, rate);
-
-    if ~isempty(posC)
-        consistByPos(iGrp, :) = mean(posC, 1, 'omitnan');
-    end
-end
-fprintf('%s\n\n', repmat('-', 1, 48));
-
-% Figure: match rate per sequential position, one line per group
-figure('Name', 'Pick-up consistency by position', 'Color', 'w', ...
-       'Position', [100 100 340 240]), clf;
-ax = gca; hold(ax, 'on');
-grpClrs = lines(nGroup);
-xPos    = 1 : nTrans;
-for iGrp = 1 : nGroup
-    plot(ax, xPos, consistByPos(iGrp,:) * 100, '-o', ...
-        'Color', grpClrs(iGrp,:), 'LineWidth', 2, 'MarkerSize', 5, ...
-        'DisplayName', grpNames{iGrp});
-end
-yline(ax, 100, '--k', 'LineWidth', 0.8, 'HandleVisibility', 'off');
-ylim(ax, [0 105]);
-xlabel(ax, 'Sequential position');
-ylabel(ax, 'Match rate (%)');
-title(ax, 'Pick-up consistency: trajectory vs response');
-legend(ax, 'Location', 'southeast', 'Box', 'off');
-set(ax, 'XTick', xPos, 'LineWidth', 1.5, 'FontSize', 12, ...
-    'FontWeight', 'bold', 'FontName', 'Arial');
 
 %% Plotting parameters
 % figKey 0 → presentation (thick lines, axis labels visible)
@@ -460,142 +287,142 @@ grpLabels = {'YA', 'OA'};
 dataVars  = {all_mouse_con_grp, all_mouse_loc_grp, all_mouse_both_grp};
 
 %% Figs 1–6: mindChanged and mindChanges — one figure per metric × condition
-% plotSpec = struct( ...
-%     'field',  {'mindChanged',          'mindChanges'}, ...
-%     'ylabel', {'P(mind change)',        'Mean # switches'}, ...
-%     'ftitle', {'Hesitation (binary)',   'Hesitation (count)'} ...
-% );
-% 
-% for iFig = 1 : 2
-%     for iCond = 1 : 3
-% 
-%         figure('Name', [plotSpec(iFig).ftitle, ' – ', condNames{iCond}], ...
-%                'Color', 'w', 'Position', figPos), clf;
-%         ax = gca; hold(ax, 'on');
-% 
-%         allGrpMeans = NaN(nGroup, nTrans);
-%         allGrpSEMs  = NaN(nGroup, nTrans);
-% 
-%         for iGrp = 1 : nGroup
-%             mouse_grp = dataVars{iCond}{iGrp};
-%             nSub_plt  = numel(mouse_grp);
-%             subMeans  = NaN(nSub_plt, nTrans);
-% 
-%             for iSub = 1 : nSub_plt
-%                 md = mouse_grp{iSub};
-%                 if isempty(md), continue; end
-%                 mc = vertcat(md.(plotSpec(iFig).field));
-%                 if isempty(mc), continue; end
-%                 subMeans(iSub, :) = mean(mc, 1, 'omitnan');
-%             end
-% 
-%             nValid  = max(sum(~isnan(subMeans), 1), 1);   % [1×nTrans], per position
-%             grpMean = mean(subMeans, 1, 'omitnan');
-%             grpSEM  = std(subMeans, 0, 1, 'omitnan') ./ sqrt(nValid);
-%             allGrpMeans(iGrp, :) = grpMean;
-%             allGrpSEMs(iGrp, :)  = grpSEM;
-% 
-%             clr  = grpColors(iGrp, :);
-%             xPos = 1 : nTrans;
-%             errorbar(ax, xPos, grpMean, grpSEM, 'Color', 'k', 'LineStyle', 'none', ...
-%                 'LineWidth', errLineWid, 'HandleVisibility', 'off');
-%             plot(ax, xPos, grpMean, '-o', 'Color', clr, ...
-%                 'LineWidth', mainLineWid, 'MarkerSize', mrkSz, ...
-%                 'MarkerEdgeColor', 'k', 'MarkerFaceColor', clr, 'DisplayName', grpLabels{iGrp});
-%         end
-% 
-%         xlim(ax, [0.5, nTrans + 0.5]);
-%         yUp  = allGrpMeans + allGrpSEMs;
-%         yLow = allGrpMeans - allGrpSEMs;
-%         yUp  = yUp(~isnan(yUp));
-%         yLow = yLow(~isnan(yLow));
-%         if ~isempty(yUp)
-%             yPad = max(0.1 * (max(yUp) - min(yLow)), 0.02);
-%             ylim(ax, [max(0, min(yLow) - yPad), max(yUp) + yPad]);
-%         end
-%         if iFig == 2
-%             if iCond == 1 || iCond == 2
-%                 ylim([0,  4]);
-%             elseif iCond == 3
-%                 ylim([0,  8]);
-%             end
-%         end
-% 
-%         applyAxStyle(ax);
-%         xticks(ax, 1 : nTrans);
-%         xlabel(ax, 'Choice position');
-%         ylabel(ax, plotSpec(iFig).ylabel);
-%         legend(ax, grpLabels, 'Location', 'best', 'Box', 'off', 'FontSize', fntSz - 2);
-%         if figKey == 0
-%             title(ax, [plotSpec(iFig).ftitle, ' – ', condNames{iCond}]);
-%         end
-%     end
-% end
+plotSpec = struct( ...
+    'field',  {'mindChanged',          'mindChanges'}, ...
+    'ylabel', {'P(mind change)',        'Mean # switches'}, ...
+    'ftitle', {'Hesitation (binary)',   'Hesitation (count)'} ...
+);
+
+for iFig = 1 : 2
+    for iCond = 1 : 3
+
+        figure('Name', [plotSpec(iFig).ftitle, ' – ', condNames{iCond}], ...
+               'Color', 'w', 'Position', figPos), clf;
+        ax = gca; hold(ax, 'on');
+
+        allGrpMeans = NaN(nGroup, nTrans);
+        allGrpSEMs  = NaN(nGroup, nTrans);
+
+        for iGrp = 1 : nGroup
+            mouse_grp = dataVars{iCond}{iGrp};
+            nSub_plt  = numel(mouse_grp);
+            subMeans  = NaN(nSub_plt, nTrans);
+
+            for iSub = 1 : nSub_plt
+                md = mouse_grp{iSub};
+                if isempty(md), continue; end
+                mc = vertcat(md.(plotSpec(iFig).field));
+                if isempty(mc), continue; end
+                subMeans(iSub, :) = mean(mc, 1, 'omitnan');
+            end
+
+            nValid  = sum(~isnan(subMeans(:, 1)));
+            grpMean = mean(subMeans, 1, 'omitnan');
+            grpSEM  = std(subMeans, 0, 1, 'omitnan') ./ sqrt(nValid);
+            allGrpMeans(iGrp, :) = grpMean;
+            allGrpSEMs(iGrp, :)  = grpSEM;
+
+            clr  = grpColors(iGrp, :);
+            xPos = 1 : nTrans;
+            errorbar(ax, xPos, grpMean, grpSEM, 'Color', 'k', 'LineStyle', 'none', ...
+                'LineWidth', errLineWid, 'HandleVisibility', 'off');
+            plot(ax, xPos, grpMean, '-o', 'Color', clr, ...
+                'LineWidth', mainLineWid, 'MarkerSize', mrkSz, ...
+                'MarkerEdgeColor', 'k', 'MarkerFaceColor', clr, 'DisplayName', grpLabels{iGrp});
+        end
+
+        xlim(ax, [0.5, nTrans + 0.5]);
+        yUp  = allGrpMeans + allGrpSEMs;
+        yLow = allGrpMeans - allGrpSEMs;
+        yUp  = yUp(~isnan(yUp));
+        yLow = yLow(~isnan(yLow));
+        if ~isempty(yUp)
+            yPad = max(0.1 * (max(yUp) - min(yLow)), 0.02);
+            ylim(ax, [max(0, min(yLow) - yPad), max(yUp) + yPad]);
+        end
+        if iFig == 2
+            if iCond == 1 || iCond == 2
+                ylim([0,  4]);
+            elseif iCond == 3
+                ylim([0,  8]);
+            end
+        end
+
+        applyAxStyle(ax);
+        xticks(ax, 1 : nTrans);
+        xlabel(ax, 'Choice position');
+        ylabel(ax, plotSpec(iFig).ylabel);
+        legend(ax, grpLabels, 'Location', 'best', 'Box', 'off', 'FontSize', fntSz - 2);
+        if figKey == 0
+            title(ax, [plotSpec(iFig).ftitle, ' – ', condNames{iCond}]);
+        end
+    end
+end
 
 %% Figs 7–9: dwell time closest to chosen stimulus — one figure per condition
-% chanceLvl = 1 / (nTrans + nDtr);   % = 1/6 ≈ 0.167
-% 
-% for iCond = 1 : 3
-% 
-%     figure('Name', ['Dwell time chosen – ', condNames{iCond}], ...
-%            'Color', 'w', 'Position', figPos), clf;
-%     ax = gca; hold(ax, 'on');
-% 
-%     %plot(ax, [0.5, nTrans+0.5], [chanceLvl, chanceLvl], '--', ...
-%     %     'Color', [0.6 0.6 0.6], 'LineWidth', refLineWid, 'HandleVisibility', 'off');
-% 
-%     allGrpMeans_chosen = NaN(nGroup, nTrans);
-%     allGrpSEMs_chosen  = NaN(nGroup, nTrans);
-% 
-%     for iGrp = 1 : nGroup
-%         mouse_grp = dataVars{iCond}{iGrp};
-%         nSub_plt  = numel(mouse_grp);
-%         subChosen = NaN(nSub_plt, nTrans);
-% 
-%         for iSub = 1 : nSub_plt
-%             md = mouse_grp{iSub};
-%             if isempty(md), continue; end
-%             mc = vertcat(md.timeInChosen);
-%             if isempty(mc), continue; end
-%             subChosen(iSub, :) = mean(mc, 1, 'omitnan');
-%         end
-% 
-%         nValid     = max(sum(~isnan(subChosen), 1), 1);   % [1×nTrans], per position
-%         meanChosen = mean(subChosen, 1, 'omitnan');
-%         semChosen  = std(subChosen,  0, 1, 'omitnan') ./ sqrt(nValid);
-%         allGrpMeans_chosen(iGrp, :) = meanChosen;
-%         allGrpSEMs_chosen(iGrp, :)  = semChosen;
-% 
-%         clr  = grpColors(iGrp, :);
-%         xPos = 1 : nTrans;
-%         errorbar(ax, xPos, meanChosen, semChosen, 'Color', 'k', 'LineStyle', 'none', ...
-%             'LineWidth', errLineWid, 'HandleVisibility', 'off');
-%         plot(ax, xPos, meanChosen, '-o', 'Color', clr, ...
-%             'LineWidth', mainLineWid, 'MarkerSize', mrkSz, ...
-%             'MarkerEdgeColor', 'k', 'MarkerFaceColor', clr, 'DisplayName', grpLabels{iGrp});
-%     end
-% 
-%     xlim(ax, [0.5, nTrans + 0.5]);
-%     yUp  = allGrpMeans_chosen + allGrpSEMs_chosen;
-%     yLow = allGrpMeans_chosen - allGrpSEMs_chosen;
-%     yUp  = [yUp(~isnan(yUp));  chanceLvl];
-%     yLow = [yLow(~isnan(yLow)); chanceLvl];
-%     if ~isempty(yUp)
-%         yPad = max(0.1 * (max(yUp) - min(yLow)), 0.02);
-%         ylim(ax, [max(0, min(yLow) - yPad), min(1, max(yUp) + yPad)]);
-%     end
-%     ylim([0, 1]);
-%     plot(xlim, [0.5, 0.5], 'k:', 'LineWidth', 0.8); hold on;
-% 
-%     applyAxStyle(ax);
-%     xticks(ax, 1 : nTrans);
-%     xlabel(ax, 'Choice position');
-%     ylabel(ax, {'Dwell time', '(chosen fraction)'});
-%     legend(ax, grpLabels, 'Location', 'best', 'Box', 'off', 'FontSize', fntSz - 2);
-%     if figKey == 0
-%         title(ax, ['Dwell time chosen – ', condNames{iCond}]);
-%     end
-% end
+chanceLvl = 1 / (nTrans + nDtr);   % = 1/6 ≈ 0.167
+
+for iCond = 1 : 3
+
+    figure('Name', ['Dwell time chosen – ', condNames{iCond}], ...
+           'Color', 'w', 'Position', figPos), clf;
+    ax = gca; hold(ax, 'on');
+
+    %plot(ax, [0.5, nTrans+0.5], [chanceLvl, chanceLvl], '--', ...
+    %     'Color', [0.6 0.6 0.6], 'LineWidth', refLineWid, 'HandleVisibility', 'off');
+
+    allGrpMeans_chosen = NaN(nGroup, nTrans);
+    allGrpSEMs_chosen  = NaN(nGroup, nTrans);
+
+    for iGrp = 1 : nGroup
+        mouse_grp = dataVars{iCond}{iGrp};
+        nSub_plt  = numel(mouse_grp);
+        subChosen = NaN(nSub_plt, nTrans);
+
+        for iSub = 1 : nSub_plt
+            md = mouse_grp{iSub};
+            if isempty(md), continue; end
+            mc = vertcat(md.timeInChosen);
+            if isempty(mc), continue; end
+            subChosen(iSub, :) = mean(mc, 1, 'omitnan');
+        end
+
+        nValid     = sum(~isnan(subChosen(:, 1)));
+        meanChosen = mean(subChosen, 1, 'omitnan');
+        semChosen  = std(subChosen,  0, 1, 'omitnan') ./ sqrt(nValid);
+        allGrpMeans_chosen(iGrp, :) = meanChosen;
+        allGrpSEMs_chosen(iGrp, :)  = semChosen;
+
+        clr  = grpColors(iGrp, :);
+        xPos = 1 : nTrans;
+        errorbar(ax, xPos, meanChosen, semChosen, 'Color', 'k', 'LineStyle', 'none', ...
+            'LineWidth', errLineWid, 'HandleVisibility', 'off');
+        plot(ax, xPos, meanChosen, '-o', 'Color', clr, ...
+            'LineWidth', mainLineWid, 'MarkerSize', mrkSz, ...
+            'MarkerEdgeColor', 'k', 'MarkerFaceColor', clr, 'DisplayName', grpLabels{iGrp});
+    end
+
+    xlim(ax, [0.5, nTrans + 0.5]);
+    yUp  = allGrpMeans_chosen + allGrpSEMs_chosen;
+    yLow = allGrpMeans_chosen - allGrpSEMs_chosen;
+    yUp  = [yUp(~isnan(yUp));  chanceLvl];
+    yLow = [yLow(~isnan(yLow)); chanceLvl];
+    if ~isempty(yUp)
+        yPad = max(0.1 * (max(yUp) - min(yLow)), 0.02);
+        ylim(ax, [max(0, min(yLow) - yPad), min(1, max(yUp) + yPad)]);
+    end
+    ylim([0, 1]);
+    plot(xlim, [0.5, 0.5], 'k:', 'LineWidth', 0.8); hold on;
+
+    applyAxStyle(ax);
+    xticks(ax, 1 : nTrans);
+    xlabel(ax, 'Choice position');
+    ylabel(ax, {'Dwell time', '(chosen fraction)'});
+    legend(ax, grpLabels, 'Location', 'best', 'Box', 'off', 'FontSize', fntSz - 2);
+    if figKey == 0
+        title(ax, ['Dwell time chosen – ', condNames{iCond}]);
+    end
+end
 
 
 %% Figs 10–18: Interclick time, selection speed, dwell time — correct vs incorrect
@@ -642,30 +469,29 @@ for iMet = 1 : 3
                 end
             end
 
-            nValidCorr   = max(sum(~isnan(subCorr),   1), 1);   % [1×nTrans]
-            nValidIncorr = max(sum(~isnan(subIncorr), 1), 1);
+            nValid = sum(~isnan(subCorr(:, 1)) | ~isnan(subIncorr(:, 1)));
             clr    = grpColors(iGrp, :);
             xPos   = 1 : nTrans;
 
             grpMeanCorr   = mean(subCorr,   1, 'omitnan');
-            grpSEMCorr    = std(subCorr,    0, 1, 'omitnan') ./ sqrt(nValidCorr);
+            grpSEMCorr    = std(subCorr,    0, 1, 'omitnan') ./ sqrt(nValid);
             grpMeanIncorr = mean(subIncorr, 1, 'omitnan');
-            grpSEMIncorr  = std(subIncorr,  0, 1, 'omitnan') ./ sqrt(nValidIncorr);
+            grpSEMIncorr  = std(subIncorr,  0, 1, 'omitnan') ./ sqrt(nValid);
 
             errorbar(ax, xPos, grpMeanCorr, grpSEMCorr, ...
-                'Color', 'k', 'LineStyle', '-', 'LineWidth', errLineWid, ... 
+                'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid, ...
                 'HandleVisibility', 'off');
-            h1 = plot(ax, xPos, grpMeanCorr, 'Color', clr, 'Marker', 'o', 'MarkerSize', 7, ...
+            h1 = plot(ax, xPos, grpMeanCorr, '-o', 'Color', clr, ...
+                'LineWidth', 2, 'MarkerSize', 7, ...
                 'MarkerEdgeColor', 'k', 'MarkerFaceColor', clr, ...
-                'LineStyle', '-', 'LineWidth', 2, ...
                 'DisplayName', [grpLabels{iGrp}, ' correct']);
 
             errorbar(ax, xPos, grpMeanIncorr, grpSEMIncorr, ...
-                'Color', 'k', 'LineStyle', ':', 'LineWidth', errLineWid, ...
+                'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid, ...
                 'HandleVisibility', 'off');
-            h2 = plot(ax, xPos, grpMeanIncorr, 'Color', clr, 'Marker', 'o', 'MarkerSize', 7, ...
-                'MarkerEdgeColor', 'k', 'MarkerFaceColor', 'none', ... 
-                'LineStyle', ':', 'LineWidth', 2, ...
+            h2 = plot(ax, xPos, grpMeanIncorr, ':o', 'Color', clr, ...
+                'LineWidth', 2, 'MarkerSize', 7, ...
+                'MarkerEdgeColor', 'k', 'MarkerFaceColor', 'none', ...
                 'DisplayName', [grpLabels{iGrp}, ' incorrect']);
         end
 
@@ -677,26 +503,17 @@ for iMet = 1 : 3
         if figKey == 0
             title(ax, [newMetrics(iMet).ftitle, ' – ', condNames{iCond}]);
         end
-        if iCond ~= 3 % full retrieval
-            if iMet == 1
-                ylim([0, 5]);
-            elseif iMet == 2
-                ylim([0, 1.2]);
-            elseif iMet == 3
-                ylim([0, 2.5]);
-            end
-        elseif iCond == 3 % full retrieval
-            if iMet == 1
-                ylim([0, 6]);
-            elseif iMet == 2
-                ylim([0, 1.2]);
-            elseif iMet == 3
-                ylim([0, 0.5]);
-            end
+        if iMet == 1
+            ylim([0, 5]);
+        elseif iMet == 2
+            ylim([0, 1.2]);
+        elseif iMet == 3
+            ylim([0, 2.5]);
         end
         
     end
 end
+
 
 %% Figs 19–27: New measures collapsed across transitions — correct vs incorrect
 % One figure per metric × condition.  x-axis: correct | incorrect (2 positions).
@@ -841,7 +658,12 @@ for iMet = 1 : 3
             [~, pAgeIncorr] = ttest2(vIYA, vIOA);
         end
 
-        % Between-group (age) statistical brackets omitted from figure.
+        bracketY_c = yTop_data + 0.28 * yRange;   % correct-condition age bracket (lower)
+        bracketY_i = yTop_data + 0.42 * yRange;   % incorrect-condition age bracket (higher)
+        drawBracket(ax, xCArr(1), xCArr(nGroup), bracketY_c, tickLen, textOff, ...
+            pToSigStr(pAgeCorr),   [0.3 0.3 0.3], 1.0, fntSz);
+        drawBracket(ax, xIArr(1), xIArr(nGroup), bracketY_i, tickLen, textOff, ...
+            pToSigStr(pAgeIncorr), [0.3 0.3 0.3], 1.0, fntSz);
 
         xlim(ax, [0.5, nGroup + 0.5]);
         xticks(ax, 1 : nGroup);
@@ -872,178 +694,178 @@ end
 %   CI vs II  — does previous correctness matter when currently incorrect?
 % YA bracket is drawn lower; OA bracket is drawn higher so they don't overlap.
 
-% seqLabels = {'Prev-C→Curr-C', 'Prev-I→Curr-C', 'Prev-C→Curr-I', 'Prev-I→Curr-I'};
-% nSeq      = 4;
-% grpOff_seq = [-0.12, 0.12];   % YA / OA offset within each x-position
-% % Heights for significance brackets (as multiples of yRange above yDataMax)
-% bracketLvl = [0.10, 0.22];    % YA = lower, OA = higher
-% 
-% for iMet = 1 : 3
-%     metField = newMetrics(iMet).field;
-% 
-%     for iCond = 1 : 3
-% 
-%         figure('Name', [newMetrics(iMet).ftitle, ' – ', condNames{iCond}, ' sequential'], ...
-%                'Color', 'w', 'Position', figPos), clf;
-%         ax = gca; hold(ax, 'on');
-% 
-%         % Background shading is drawn after ylim is set (see below) so that
-%         % patch y-coordinates don't distort the auto-scaled axis.
-% 
-%         hGrp    = gobjects(nGroup, 1);   % one handle per group for legend
-%         xPosAll = NaN(nGroup, nSeq);     % x positions for bracket drawing
-%         subAll  = cell(nGroup, 1);       % [nSub × 4] per-subject means
-%         yTopAll = NaN(nGroup, nSeq);     % y maxima for bracket placement
-% 
-%         for iGrp = 1 : nGroup
-%             mouse_grp = dataVars{iCond}{iGrp};
-%             nSub_plt  = numel(mouse_grp);
-%             clr       = grpColors(iGrp, :);
-% 
-%             subMat = NaN(nSub_plt, nSeq);   % cols: CC, IC, CI, II
-% 
-%             for iSub = 1 : nSub_plt
-%                 md = mouse_grp{iSub};
-%                 if isempty(md), continue; end
-%                 mc_met = vertcat(md.(metField));   % [nTrials × nTrans]
-%                 mc_cor = vertcat(md.isCorrect);    % [nTrials × nTrans]
-%                 if isempty(mc_met) || isempty(mc_cor), continue; end
-% 
-%                 vCC = []; vIC = []; vCI = []; vII = [];
-%                 for k = 2 : nTrans
-%                     prev = mc_cor(:, k-1);   % NaN if not reached
-%                     curr = mc_cor(:, k);
-%                     met  = mc_met(:, k);
-%                     % NaN==1 is false, so unresponded positions are excluded
-%                     vCC = [vCC;  met(prev==1 & curr==1)]; %#ok<AGROW>
-%                     vIC = [vIC;  met(prev==0 & curr==1)]; %#ok<AGROW>
-%                     vCI = [vCI;  met(prev==1 & curr==0)]; %#ok<AGROW>
-%                     vII = [vII;  met(prev==0 & curr==0)]; %#ok<AGROW>
-%                 end
-%                 subMat(iSub, 1) = mean(vCC, 'omitnan');
-%                 subMat(iSub, 2) = mean(vIC, 'omitnan');
-%                 subMat(iSub, 3) = mean(vCI, 'omitnan');
-%                 subMat(iSub, 4) = mean(vII, 'omitnan');
-%             end
-% 
-%             subAll{iGrp} = subMat;
-% 
-%             for iSeq = 1 : nSeq
-%                 xPos = iSeq + grpOff_seq(iGrp);
-%                 xPosAll(iGrp, iSeq) = xPos;
-%                 vals = subMat(:, iSeq);
-%                 nV   = sum(~isnan(vals));
-%                 mV   = mean(vals, 'omitnan');
-%                 seV  = std(vals, 0, 1, 'omitnan') / sqrt(max(nV, 1));
-% 
-%                 % Individual subject dots
-%                 scatter(ax, xPos * ones(nSub_plt, 1), vals, 16, clr, ...
-%                     'filled', 'MarkerFaceAlpha', 0.35, 'HandleVisibility', 'off');
-% 
-%                 % Group mean ± SEM
-%                 errorbar(ax, xPos, mV, seV, 'Color', 'k', 'LineStyle', 'none', ...
-%                     'LineWidth', errLineWid, 'HandleVisibility', 'off');
-%                 h = plot(ax, xPos, mV, 'o', 'Color', clr, ...
-%                     'MarkerSize', mrkSz + 1, 'MarkerEdgeColor', 'k', ...
-%                     'MarkerFaceColor', clr, 'LineWidth', mainLineWid, ...
-%                     'HandleVisibility', 'off');
-% 
-%                 yTopAll(iGrp, iSeq) = max([mV + seV; vals(~isnan(vals))]);
-% 
-%                 if iSeq == 1   % first sequence condition: register legend handle
-%                     hGrp(iGrp) = h;
-%                     set(hGrp(iGrp), 'HandleVisibility', 'on', ...
-%                         'DisplayName', grpLabels{iGrp});
-%                 end
-%             end
-% 
-%             % Connect means within current-correct pair (CC–IC) and
-%             % current-incorrect pair (CI–II) to show within-category trend
-%             mV_all = mean(subMat, 1, 'omitnan');
-%             plot(ax, xPosAll(iGrp, 1:2), mV_all(1:2), '-', 'Color', clr, ...
-%                 'LineWidth', mainLineWid * 0.7, 'HandleVisibility', 'off');
-%             plot(ax, xPosAll(iGrp, 3:4), mV_all(3:4), '-', 'Color', clr, ...
-%                 'LineWidth', mainLineWid * 0.7, 'HandleVisibility', 'off');
-%         end
-% 
-%         % --- Significance brackets (after all data is plotted) ---
-%         yDataMax = max(yTopAll(:));
-%         yCurr    = ylim(ax);
-%         yRange   = yDataMax - yCurr(1);
-%         tickLen  = 0.025 * yRange;
-%         textOff  = 0.020 * yRange;
-% 
-%         % Two comparisons: CC vs IC (cols 1,2) and CI vs II (cols 3,4)
-%         sigPairs = [1, 2; 3, 4];
-% 
-%         for iGrp = 1 : nGroup
-%             bracY = yDataMax + bracketLvl(iGrp) * yRange;
-% 
-%             for iPair = 1 : 2
-%                 c1 = sigPairs(iPair, 1);
-%                 c2 = sigPairs(iPair, 2);
-%                 x1 = xPosAll(iGrp, c1);
-%                 x2 = xPosAll(iGrp, c2);
-%                 sm = subAll{iGrp};
-% 
-%                 validBoth = ~isnan(sm(:, c1)) & ~isnan(sm(:, c2));
-%                 if sum(validBoth) > 1
-%                     [~, p] = ttest(sm(validBoth, c1), sm(validBoth, c2));
-%                 else
-%                     continue;
-%                 end
-% 
-%                 if     p < 0.001, sigStr = '***';
-%                 elseif p < 0.01,  sigStr = '**';
-%                 elseif p < 0.05,  sigStr = '*';
-%                 else,             sigStr = 'ns';
-%                 end
-% 
-%                 clr = grpColors(iGrp, :);
-%                 plot(ax, [x1, x2], [bracY, bracY], '-', 'Color', clr, ...
-%                     'LineWidth', 1.0, 'HandleVisibility', 'off');
-%                 plot(ax, [x1, x1], [bracY - tickLen, bracY], '-', 'Color', clr, ...
-%                     'LineWidth', 1.0, 'HandleVisibility', 'off');
-%                 plot(ax, [x2, x2], [bracY - tickLen, bracY], '-', 'Color', clr, ...
-%                     'LineWidth', 1.0, 'HandleVisibility', 'off');
-%                 text(ax, (x1 + x2) / 2, bracY + textOff, sigStr, ...
-%                     'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
-%                     'FontSize', fntSz, 'FontName', 'Arial', 'Color', clr);
-%             end
-%         end
-% 
-%         % Expand y-axis to clear all brackets and labels
-%         yTop = yDataMax + (bracketLvl(end) + 0.15) * yRange;
-%         ylim(ax, [yCurr(1), yTop]);
-% 
-%         % Now draw background shading with correct y limits, then push to back
-%         yL = ylim(ax);
-%         p1 = patch(ax, [0.5 2.5 2.5 0.5], [yL(1) yL(1) yL(2) yL(2)], [0.93 0.98 0.93], ...
-%             'EdgeColor', 'none', 'FaceAlpha', 0.6, 'HandleVisibility', 'off');
-%         p2 = patch(ax, [2.5 4.5 4.5 2.5], [yL(1) yL(1) yL(2) yL(2)], [0.98 0.93 0.93], ...
-%             'EdgeColor', 'none', 'FaceAlpha', 0.6, 'HandleVisibility', 'off');
-%         uistack(p1, 'bottom');
-%         uistack(p2, 'bottom');
-% 
-%         % Vertical divider between current-correct and current-incorrect halves
-%         plot(ax, [2.5 2.5], ylim(ax), '--', 'Color', [0.6 0.6 0.6], ...
-%             'LineWidth', 0.8, 'HandleVisibility', 'off');
-% 
-%         % x-axis labels: two-line tick labels via text() annotations
-%         xlim(ax, [0.5, nSeq + 0.5]);
-%         xticks(ax, 1 : nSeq);
-%         xticklabels(ax, seqLabels);
-%         ax.XTickLabelRotation = 20;
-% 
-%         applyAxStyle(ax);
-%         ylabel(ax, newMetrics(iMet).ylabel);
-%         legend(ax, hGrp, grpLabels, 'Location', 'best', 'Box', 'off', ...
-%             'FontSize', fntSz - 2);
-%         if figKey == 0
-%             title(ax, [newMetrics(iMet).ftitle, ' – ', condNames{iCond}, ' (sequential)']);
-%         end
-%     end
-% end
+seqLabels = {'Prev-C→Curr-C', 'Prev-I→Curr-C', 'Prev-C→Curr-I', 'Prev-I→Curr-I'};
+nSeq      = 4;
+grpOff_seq = [-0.12, 0.12];   % YA / OA offset within each x-position
+% Heights for significance brackets (as multiples of yRange above yDataMax)
+bracketLvl = [0.10, 0.22];    % YA = lower, OA = higher
+
+for iMet = 1 : 3
+    metField = newMetrics(iMet).field;
+
+    for iCond = 1 : 3
+
+        figure('Name', [newMetrics(iMet).ftitle, ' – ', condNames{iCond}, ' sequential'], ...
+               'Color', 'w', 'Position', figPos), clf;
+        ax = gca; hold(ax, 'on');
+
+        % Background shading is drawn after ylim is set (see below) so that
+        % patch y-coordinates don't distort the auto-scaled axis.
+
+        hGrp    = gobjects(nGroup, 1);   % one handle per group for legend
+        xPosAll = NaN(nGroup, nSeq);     % x positions for bracket drawing
+        subAll  = cell(nGroup, 1);       % [nSub × 4] per-subject means
+        yTopAll = NaN(nGroup, nSeq);     % y maxima for bracket placement
+
+        for iGrp = 1 : nGroup
+            mouse_grp = dataVars{iCond}{iGrp};
+            nSub_plt  = numel(mouse_grp);
+            clr       = grpColors(iGrp, :);
+
+            subMat = NaN(nSub_plt, nSeq);   % cols: CC, IC, CI, II
+
+            for iSub = 1 : nSub_plt
+                md = mouse_grp{iSub};
+                if isempty(md), continue; end
+                mc_met = vertcat(md.(metField));   % [nTrials × nTrans]
+                mc_cor = vertcat(md.isCorrect);    % [nTrials × nTrans]
+                if isempty(mc_met) || isempty(mc_cor), continue; end
+
+                vCC = []; vIC = []; vCI = []; vII = [];
+                for k = 2 : nTrans
+                    prev = mc_cor(:, k-1);   % NaN if not reached
+                    curr = mc_cor(:, k);
+                    met  = mc_met(:, k);
+                    % NaN==1 is false, so unresponded positions are excluded
+                    vCC = [vCC;  met(prev==1 & curr==1)]; %#ok<AGROW>
+                    vIC = [vIC;  met(prev==0 & curr==1)]; %#ok<AGROW>
+                    vCI = [vCI;  met(prev==1 & curr==0)]; %#ok<AGROW>
+                    vII = [vII;  met(prev==0 & curr==0)]; %#ok<AGROW>
+                end
+                subMat(iSub, 1) = mean(vCC, 'omitnan');
+                subMat(iSub, 2) = mean(vIC, 'omitnan');
+                subMat(iSub, 3) = mean(vCI, 'omitnan');
+                subMat(iSub, 4) = mean(vII, 'omitnan');
+            end
+
+            subAll{iGrp} = subMat;
+
+            for iSeq = 1 : nSeq
+                xPos = iSeq + grpOff_seq(iGrp);
+                xPosAll(iGrp, iSeq) = xPos;
+                vals = subMat(:, iSeq);
+                nV   = sum(~isnan(vals));
+                mV   = mean(vals, 'omitnan');
+                seV  = std(vals, 0, 1, 'omitnan') / sqrt(max(nV, 1));
+
+                % Individual subject dots
+                scatter(ax, xPos * ones(nSub_plt, 1), vals, 16, clr, ...
+                    'filled', 'MarkerFaceAlpha', 0.35, 'HandleVisibility', 'off');
+
+                % Group mean ± SEM
+                errorbar(ax, xPos, mV, seV, 'Color', 'k', 'LineStyle', 'none', ...
+                    'LineWidth', errLineWid, 'HandleVisibility', 'off');
+                h = plot(ax, xPos, mV, 'o', 'Color', clr, ...
+                    'MarkerSize', mrkSz + 1, 'MarkerEdgeColor', 'k', ...
+                    'MarkerFaceColor', clr, 'LineWidth', mainLineWid, ...
+                    'HandleVisibility', 'off');
+
+                yTopAll(iGrp, iSeq) = max([mV + seV; vals(~isnan(vals))]);
+
+                if iSeq == 1   % first sequence condition: register legend handle
+                    hGrp(iGrp) = h;
+                    set(hGrp(iGrp), 'HandleVisibility', 'on', ...
+                        'DisplayName', grpLabels{iGrp});
+                end
+            end
+
+            % Connect means within current-correct pair (CC–IC) and
+            % current-incorrect pair (CI–II) to show within-category trend
+            mV_all = mean(subMat, 1, 'omitnan');
+            plot(ax, xPosAll(iGrp, 1:2), mV_all(1:2), '-', 'Color', clr, ...
+                'LineWidth', mainLineWid * 0.7, 'HandleVisibility', 'off');
+            plot(ax, xPosAll(iGrp, 3:4), mV_all(3:4), '-', 'Color', clr, ...
+                'LineWidth', mainLineWid * 0.7, 'HandleVisibility', 'off');
+        end
+
+        % --- Significance brackets (after all data is plotted) ---
+        yDataMax = max(yTopAll(:));
+        yCurr    = ylim(ax);
+        yRange   = yDataMax - yCurr(1);
+        tickLen  = 0.025 * yRange;
+        textOff  = 0.020 * yRange;
+
+        % Two comparisons: CC vs IC (cols 1,2) and CI vs II (cols 3,4)
+        sigPairs = [1, 2; 3, 4];
+
+        for iGrp = 1 : nGroup
+            bracY = yDataMax + bracketLvl(iGrp) * yRange;
+
+            for iPair = 1 : 2
+                c1 = sigPairs(iPair, 1);
+                c2 = sigPairs(iPair, 2);
+                x1 = xPosAll(iGrp, c1);
+                x2 = xPosAll(iGrp, c2);
+                sm = subAll{iGrp};
+
+                validBoth = ~isnan(sm(:, c1)) & ~isnan(sm(:, c2));
+                if sum(validBoth) > 1
+                    [~, p] = ttest(sm(validBoth, c1), sm(validBoth, c2));
+                else
+                    continue;
+                end
+
+                if     p < 0.001, sigStr = '***';
+                elseif p < 0.01,  sigStr = '**';
+                elseif p < 0.05,  sigStr = '*';
+                else,             sigStr = 'ns';
+                end
+
+                clr = grpColors(iGrp, :);
+                plot(ax, [x1, x2], [bracY, bracY], '-', 'Color', clr, ...
+                    'LineWidth', 1.0, 'HandleVisibility', 'off');
+                plot(ax, [x1, x1], [bracY - tickLen, bracY], '-', 'Color', clr, ...
+                    'LineWidth', 1.0, 'HandleVisibility', 'off');
+                plot(ax, [x2, x2], [bracY - tickLen, bracY], '-', 'Color', clr, ...
+                    'LineWidth', 1.0, 'HandleVisibility', 'off');
+                text(ax, (x1 + x2) / 2, bracY + textOff, sigStr, ...
+                    'HorizontalAlignment', 'center', 'VerticalAlignment', 'bottom', ...
+                    'FontSize', fntSz, 'FontName', 'Arial', 'Color', clr);
+            end
+        end
+
+        % Expand y-axis to clear all brackets and labels
+        yTop = yDataMax + (bracketLvl(end) + 0.15) * yRange;
+        ylim(ax, [yCurr(1), yTop]);
+
+        % Now draw background shading with correct y limits, then push to back
+        yL = ylim(ax);
+        p1 = patch(ax, [0.5 2.5 2.5 0.5], [yL(1) yL(1) yL(2) yL(2)], [0.93 0.98 0.93], ...
+            'EdgeColor', 'none', 'FaceAlpha', 0.6, 'HandleVisibility', 'off');
+        p2 = patch(ax, [2.5 4.5 4.5 2.5], [yL(1) yL(1) yL(2) yL(2)], [0.98 0.93 0.93], ...
+            'EdgeColor', 'none', 'FaceAlpha', 0.6, 'HandleVisibility', 'off');
+        uistack(p1, 'bottom');
+        uistack(p2, 'bottom');
+
+        % Vertical divider between current-correct and current-incorrect halves
+        plot(ax, [2.5 2.5], ylim(ax), '--', 'Color', [0.6 0.6 0.6], ...
+            'LineWidth', 0.8, 'HandleVisibility', 'off');
+
+        % x-axis labels: two-line tick labels via text() annotations
+        xlim(ax, [0.5, nSeq + 0.5]);
+        xticks(ax, 1 : nSeq);
+        xticklabels(ax, seqLabels);
+        ax.XTickLabelRotation = 20;
+
+        applyAxStyle(ax);
+        ylabel(ax, newMetrics(iMet).ylabel);
+        legend(ax, hGrp, grpLabels, 'Location', 'best', 'Box', 'off', ...
+            'FontSize', fntSz - 2);
+        if figKey == 0
+            title(ax, [newMetrics(iMet).ftitle, ' – ', condNames{iCond}, ' (sequential)']);
+        end
+    end
+end
 
 
 %% Example participant: mouse trajectory and distance to stimuli over time
@@ -1063,7 +885,7 @@ sqHW         = imgSize_plot / 2;   % half-width for drawn squares
 %          set to 0 to auto-pick the first trial valid in ALL conditions
 exGrp   = 1;
 exSub   = 1;
-exTrial = 1;
+exTrial = 5;
 
 md_c = all_mouse_con_grp{exGrp}{exSub};
 md_l = all_mouse_loc_grp{exGrp}{exSub};
@@ -1101,232 +923,133 @@ else
     %% Figs 16–18: Mouse trajectory colored by time — one figure per condition
     for iCond = 1 : 3
 
+        figure('Name', ['Trajectory – ', condNames{iCond}], ...
+               'Color', 'w', 'Position', [100 100 360 320]), clf;
+        ax = gca; hold(ax, 'on');
+
         md   = exData{iCond};
         traj = md.trajectory;
 
-        if iCond == 3
-            % Both report: side-by-side panels for content (inner images) and
-            % location (outer slots) dimensions.
-            figure('Name', ['Trajectory – ', condNames{iCond}], ...
-                   'Color', 'w', 'Position', [100 100 720 320]), clf;
-            axList = {subplot(1,2,1), subplot(1,2,2)};
-            panelTitles = {'Content dimension (images)', 'Location dimension (slots)'};
-        else
-            figure('Name', ['Trajectory – ', condNames{iCond}], ...
-                   'Color', 'w', 'Position', [100 100 360 320]), clf;
-            axList = {gca};
-            panelTitles = {['Trajectory – ', condNames{iCond}]};
-        end
-
         if isempty(traj)
-            for iAx = 1:length(axList), applyAxStyle(axList{iAx}); end
-            continue;
+            applyAxStyle(ax); continue;
         end
 
         xT    = traj(:, 1);
         yT    = traj(:, 2);
         tT    = traj(:, 3);
         tNorm = (tT - tT(1)) / max(tT(end) - tT(1), eps);
+
+        scatter(ax, xT, yT, 10, tNorm, 'filled', 'MarkerFaceAlpha', 0.8);
+        colormap(ax, 'cool');
+        cb = colorbar(ax);
+        cb.Label.String = 'Time (norm.)';
+        caxis(ax, [0, 1]);
+
+        stimX   = md.stimX;
+        stimY   = md.stimY;
         trueOrd = md.trueOrder;
-        clickT  = md.clickTimes;
-
-        % For 'both': split trajectory samples into pick-up vs drag phase using
-        % the same criterion as in the analysis — a sample is in the pick-up
-        % phase (content panel) when the cursor is closer to any inner-circle
-        % image than to any outer slot; drag phase (location panel) otherwise.
-        if iCond == 3 && ~isempty(md.distToStim) && ~isempty(md.distToSlot)
-            minStim     = min(md.distToStim, [], 2);   % [nT × 1]
-            minSlot     = min(md.distToSlot, [], 2);
-            phaseMask   = {minStim < minSlot, minStim >= minSlot};  % {pickup, drag}
-        else
-            phaseMask   = {true(size(xT)), true(size(xT))};
+        if ~isempty(stimX)
+            for iS = 1 : length(stimX)
+                rectangle(ax, 'Position', ...
+                    [stimX(iS)-sqHW, stimY(iS)-sqHW, 2*sqHW, 2*sqHW], ...
+                    'EdgeColor', stimCmap(iS,:), 'LineWidth', 2, 'FaceColor', 'none');
+                if ~isempty(trueOrd) && iS <= length(trueOrd)
+                    tOrdVal = trueOrd(iS);
+                    lbl = 'dtr';
+                    if tOrdVal ~= nTrans + nDtr, lbl = num2str(tOrdVal); end
+                else
+                    lbl = num2str(iS);
+                end
+                text(ax, stimX(iS), stimY(iS) - sqHW - 0.02, lbl, ...
+                    'Color', stimCmap(iS,:), 'FontSize', fntSz - 1, ...
+                    'FontWeight', 'bold', 'FontName', 'Arial', ...
+                    'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
+                    'BackgroundColor', 'w', 'Margin', 1);
+            end
         end
 
-        nPanels = length(axList);
-        for iPanel = 1 : nPanels
-            ax = axList{iPanel};
-            hold(ax, 'on');
-
-            % For 'both': each panel shows only the trajectory samples for that phase
-            if iCond == 3
-                mask  = phaseMask{iPanel};
-                xPlot = xT(mask);  yPlot = yT(mask);  cPlot = tNorm(mask);
-            else
-                xPlot = xT;  yPlot = yT;  cPlot = tNorm;
+        if iCond == 3 && ~isempty(md.slotX)
+            for iS = 1 : length(md.slotX)
+                rectangle(ax, 'Position', ...
+                    [md.slotX(iS)-sqHW, md.slotY(iS)-sqHW, 2*sqHW, 2*sqHW], ...
+                    'EdgeColor', stimCmap(iS,:), 'LineWidth', 1.5, ...
+                    'FaceColor', 'none', 'LineStyle', '--');
             end
-
-            scatter(ax, xPlot, yPlot, 10, cPlot, 'filled', 'MarkerFaceAlpha', 0.8);
-            colormap(ax, 'cool');
-            cb = colorbar(ax);
-            cb.Label.String = 'Time (norm.)';
-            caxis(ax, [0, 1]);
-
-            % Choose which stimulus positions to draw for this panel
-            if iCond == 3 && iPanel == 1
-                % Content dimension: inner-circle image positions (solid squares)
-                pX = md.stimX;  pY = md.stimY;
-                rectStyle = '-';   rectLW = 2;
-            elseif iCond == 3 && iPanel == 2
-                % Location dimension: outer-circle slot positions (dashed squares)
-                pX = md.slotX;  pY = md.slotY;
-                rectStyle = '--';  rectLW = 1.5;
-            else
-                pX = md.stimX;  pY = md.stimY;
-                rectStyle = '-';   rectLW = 2;
-            end
-
-            if ~isempty(pX)
-                for iS = 1 : length(pX)
-                    rectangle(ax, 'Position', ...
-                        [pX(iS)-sqHW, pY(iS)-sqHW, 2*sqHW, 2*sqHW], ...
-                        'EdgeColor', stimCmap(iS,:), 'LineWidth', rectLW, ...
-                        'FaceColor', 'none', 'LineStyle', rectStyle);
-                    if ~isempty(trueOrd) && iS <= length(trueOrd)
-                        tOrdVal = trueOrd(iS);
-                        lbl = 'dtr';
-                        if tOrdVal ~= nTrans + nDtr, lbl = num2str(tOrdVal); end
-                    else
-                        lbl = num2str(iS);
-                    end
-                    text(ax, pX(iS), pY(iS) - sqHW - 0.02, lbl, ...
-                        'Color', stimCmap(iS,:), 'FontSize', fntSz - 1, ...
-                        'FontWeight', 'bold', 'FontName', 'Arial', ...
-                        'HorizontalAlignment', 'center', 'VerticalAlignment', 'top', ...
-                        'BackgroundColor', 'w', 'Margin', 1);
-                end
-            end
-
-            % Drop-time markers: only shown in the location panel for 'both'
-            % (drops occur at the end of the drag phase), in both panels otherwise.
-            if ~isempty(clickT) && ~(iCond == 3 && iPanel == 1)
-                for iK = 1 : length(clickT)
-                    [~, tidx] = min(abs(tT - clickT(iK)));
-                    plot(ax, xT(tidx), yT(tidx), 'v', ...
-                        'Color', 'k', 'MarkerSize', mrkSz + 2, 'MarkerFaceColor', 'k');
-                end
-            end
-
-            axis(ax, 'equal');
-            applyAxStyle(ax);
-            xlabel(ax, 'x (norm.)');
-            ylabel(ax, 'y (norm.)');
-            title(ax, panelTitles{iPanel});
         end
+
+        clickT = md.clickTimes;
+        if ~isempty(clickT)
+            for iK = 1 : length(clickT)
+                [~, tidx] = min(abs(tT - clickT(iK)));
+                plot(ax, xT(tidx), yT(tidx), 'v', ...
+                    'Color', 'k', 'MarkerSize', mrkSz + 2, 'MarkerFaceColor', 'k');
+            end
+        end
+
+        axis(ax, 'equal');
+        applyAxStyle(ax);
+        xlabel(ax, 'x (norm.)');
+        ylabel(ax, 'y (norm.)');
+        title(ax, ['Trajectory – ', condNames{iCond}]);
     end
 
     %% Figs 19–21: Distance to each stimulus/slot over time — one figure per condition
     for iCond = 1 : 3
 
-        md   = exData{iCond};
-        traj = md.trajectory;
+        figure('Name', ['Distance – ', condNames{iCond}], ...
+               'Color', 'w', 'Position', [100 100 600 280]), clf;
+        ax = gca; hold(ax, 'on');
 
-        if iCond == 3
-            % Both report: side-by-side panels for content (distToStim) and
-            % location (distToSlot) dimensions.
-            figure('Name', ['Distance – ', condNames{iCond}], ...
-                   'Color', 'w', 'Position', [100 100 1100 280]), clf;
-            distMats   = {md.distToStim, md.distToSlot};
-            panelTitles = {'Content dimension (distance to images)', ...
-                           'Location dimension (distance to slots)'};
-        else
-            figure('Name', ['Distance – ', condNames{iCond}], ...
-                   'Color', 'w', 'Position', [100 100 600 280]), clf;
-            distMats    = {md.(distFieldEx{iCond})};
-            panelTitles = {['Distance – ', condNames{iCond}]};
+        md      = exData{iCond};
+        traj    = md.trajectory;
+        distMat = md.(distFieldEx{iCond});
+
+        if isempty(traj) || isempty(distMat)
+            applyAxStyle(ax); continue;
         end
 
-        if isempty(traj)
-            applyAxStyle(gca); continue;
-        end
+        tT   = traj(:, 3);
+        tOff = (tT - tT(1)) / max(tT(end) - tT(1), eps);
 
-        tT     = traj(:, 3);
-        tOff   = (tT - tT(1)) / max(tT(end) - tT(1), eps);
-        tRange = max(tT(end) - tT(1), eps);
         trueOrd = md.trueOrder;
-        clickT  = md.clickTimes;
-
-        % For 'both' content panel: restrict distance curve to pick-up phase
-        % samples only (same criterion as Trim 2 in analyzeChoiceHesitation).
-        pickupPhaseMask = true(size(tT));
-        if iCond == 3 && ~isempty(md.distToStim) && ~isempty(md.distToSlot)
-            minStim = min(md.distToStim, [], 2);
-            minSlot = min(md.distToSlot, [], 2);
-            pickupPhaseMask = minStim < minSlot;
-        end
-
-        nPanels = length(distMats);
-        for iPanel = 1 : nPanels
-            if iCond == 3
-                ax = subplot(1, 2, iPanel);
+        for iS = 1 : size(distMat, 2)
+            if ~isempty(trueOrd) && iS <= length(trueOrd)
+                tOrdVal = trueOrd(iS);
+                if tOrdVal == nTrans + nDtr
+                    legLabel = sprintf('S%d (dtr)', iS);
+                else
+                    legLabel = sprintf('S%d (true=%d)', iS, tOrdVal);
+                end
             else
-                ax = gca;
+                legLabel = ['S', num2str(iS)];
             end
-            hold(ax, 'on');
-
-            distMat = distMats{iPanel};
-            if isempty(distMat), applyAxStyle(ax); continue; end
-
-            for iS = 1 : size(distMat, 2)
-                if ~isempty(trueOrd) && iS <= length(trueOrd)
-                    tOrdVal = trueOrd(iS);
-                    if tOrdVal == nTrans + nDtr
-                        legLabel = sprintf('S%d (dtr)', iS);
-                    else
-                        legLabel = sprintf('S%d (true=%d)', iS, tOrdVal);
-                    end
-                else
-                    legLabel = ['S', num2str(iS)];
-                end
-
-                plot(ax, tOff, distMat(:, iS), '-', ...
-                    'Color', stimCmap(iS,:), 'LineWidth', mainLineWid, ...
-                    'DisplayName', legLabel);
-            end
-
-            yTop = max(distMat(:)) * 1.1;
-            if ~isempty(clickT)
-                if iCond == 3 && iPanel == 1
-                    % Content panel: mark P1–P5 at the END of each pick-up
-                    % phase — the last sample in each inter-click window where
-                    % the cursor is still closer to an inner image than any slot.
-                    pClr = [0.6 0.2 0.8];
-                    for iK = 1 : length(clickT)
-                        tWinStart = -inf;
-                        if iK > 1, tWinStart = clickT(iK - 1); end
-                        winMask      = tT > tWinStart & tT <= clickT(iK);
-                        lastPickupIdx = find(winMask & pickupPhaseMask, 1, 'last');
-                        if isempty(lastPickupIdx), continue; end
-                        tPick = (tT(lastPickupIdx) - tT(1)) / tRange;
-                        if tPick < 0 || tPick > 1, continue; end
-                        plot(ax, [tPick, tPick], [0, yTop], '--', ...
-                            'Color', pClr, 'LineWidth', refLineWid, ...
-                            'HandleVisibility', 'off');
-                        text(ax, tPick, yTop * 0.96, ['P', num2str(iK)], ...
-                            'FontSize', fntSz - 2, 'FontName', 'Arial', ...
-                            'HorizontalAlignment', 'center', 'Color', pClr);
-                    end
-                else
-                    % Location panel and all non-both panels: drop time markers.
-                    for iK = 1 : length(clickT)
-                        tClick = (clickT(iK) - tT(1)) / tRange;
-                        if tClick < 0 || tClick > 1, continue; end
-                        plot(ax, [tClick, tClick], [0, yTop], '--k', ...
-                            'LineWidth', refLineWid, 'HandleVisibility', 'off');
-                        text(ax, tClick, yTop * 0.96, ['C', num2str(iK)], ...
-                            'FontSize', fntSz - 2, 'FontName', 'Arial', ...
-                            'HorizontalAlignment', 'center', 'Color', 'k');
-                    end
-                end
-            end
-
-            xlim(ax, [0, 1]);
-            ylim(ax, [0, yTop]);
-            applyAxStyle(ax);
-            legend(ax, 'Location', 'northeast', 'Box', 'off', 'FontSize', fntSz - 2);
-            xlabel(ax, 'Time (norm.)');
-            ylabel(ax, 'Distance (norm. units)');
-            title(ax, panelTitles{iPanel});
+            plot(ax, tOff, distMat(:, iS), '-', ...
+                'Color', stimCmap(iS,:), 'LineWidth', mainLineWid, ...
+                'DisplayName', legLabel);
         end
+
+        clickT = md.clickTimes;
+        yTop   = max(distMat(:)) * 1.1;
+        tRange = max(tT(end) - tT(1), eps);
+        if ~isempty(clickT)
+            for iK = 1 : length(clickT)
+                tClick = (clickT(iK) - tT(1)) / tRange;
+                if tClick < 0 || tClick > 1, continue; end   % skip out-of-range clicks
+                plot(ax, [tClick, tClick], [0, yTop], '--k', ...
+                    'LineWidth', refLineWid, 'HandleVisibility', 'off');
+                text(ax, tClick, yTop * 0.96, ['C', num2str(iK)], ...
+                    'FontSize', fntSz - 2, 'FontName', 'Arial', ...
+                    'HorizontalAlignment', 'center', 'Color', 'k');
+            end
+        end
+
+        xlim(ax, [0, 1]);
+        ylim(ax, [0, yTop]);
+        applyAxStyle(ax);
+        legend(ax, 'Location', 'northeast', 'Box', 'off', 'FontSize', fntSz - 2);
+        xlabel(ax, 'Time (norm.)');
+        ylabel(ax, 'Distance (norm. units)');
+        title(ax, ['Distance – ', condNames{iCond}]);
     end
 end
 
@@ -1594,10 +1317,6 @@ for iRep = 1 : length(mouse_data)
     traj      = mouse_data(iRep).trajectory;
     distMat   = mouse_data(iRep).(distField);
     reportRow = mouse_data(iRep).rowReport;
-    distStimMat = [];
-    if strcmp(reportType, 'both')
-        distStimMat = mouse_data(iRep).distToStim;
-    end
 
     if isempty(traj) || isempty(distMat) || isempty(reportRow)
         continue;
@@ -1617,7 +1336,16 @@ for iRep = 1 : length(mouse_data)
             continue;
         end
         mat    = reshape(allNums, 2, 6)';  % [6×2]
-        repOrd = mat(:, 2)';               % [1×6]: location drop order per slot
+        repOrd = mat(:, 2)';               % [1×6]: location click order per slot
+        % bothRTs records only location drop times.  When the content click
+        % order (mat(:,1)) differs from the location drop order (mat(:,2))
+        % for any valid slot, the trajectory windows built from bothRTs would
+        % be wrong for the content dimension — skip those trials.
+        preMask  = repOrd >= 1 & repOrd <= nTrans;
+        conValid = mat(preMask', 1)';      % content orders of location-valid slots
+        if ~all(conValid == repOrd(preMask))
+            continue;
+        end
     else
         repOrd = allNums;
     end
@@ -1695,8 +1423,6 @@ for iRep = 1 : length(mouse_data)
     closestAtClick = NaN(1, nResp);
     selSpeed       = NaN(1, nResp);
     dwellTime      = NaN(1, nResp);
-    pickupTime        = NaN(1, nResp);   % 'both' only: duration of pick-up phase per choice
-    pickupConsistent  = NaN(1, nResp);   % 'both' only: 1=trajectory matches response, 0=mismatch
 
     for iChoice = 1 : nResp
         t_end   = clickTimes(iChoice);
@@ -1714,84 +1440,28 @@ for iRep = 1 : length(mouse_data)
         distSeg = distMat(segMask, :);            % [nSamp × nStim]
         [~, closestIdx] = min(distSeg, [], 2);    % [nSamp × 1]
 
-        % Cursor path over the full interclick window.
-        % For 'con'/'loc' selSpeed is computed here (over full window).
-        % For 'both' selSpeed is deferred to after the drag-phase trim below.
+        % Path length over the full interclick window (before deliberation trimming).
         xSeg_full = txAll(segMask);
         ySeg_full = tyAll(segMask);
-        if ~strcmp(reportType, 'both')
-            pathLen = sum(sqrt(diff(xSeg_full).^2 + diff(ySeg_full).^2));
-            if interClickTime(iChoice) > 0
-                selSpeed(iChoice) = pathLen / interClickTime(iChoice);
-            end
+        pathLen = sum(sqrt(diff(xSeg_full).^2 + diff(ySeg_full).^2));
+        if interClickTime(iChoice) > 0
+            selSpeed(iChoice) = pathLen / interClickTime(iChoice);
         end
 
-        % Trim 1: remove the leading period where the cursor lingers on the
-        % previously chosen stimulus (inertia, not deliberation about the next).
-        trimStart = 1;
+        % For choices after the first: the cursor may linger on the just-clicked
+        % stimulus at the start of the window (inertia, not deliberation).
+        % Trim the leading portion where the previously chosen stimulus is still
+        % closest — deliberation about the next choice only begins once the
+        % cursor leaves that territory.
         if iChoice > 1
             prevChosen = chosenSlots(iChoice - 1);
             leftPrev   = find(closestIdx ~= prevChosen, 1, 'first');
             if isempty(leftPrev)
+                % Cursor never left previous stimulus → nothing to analyse
                 continue;
             end
-            trimStart = leftPrev;
-        end
-        closestIdx = closestIdx(trimStart : end);
-        tSeg       = tSeg(trimStart : end);
-        xSeg_full  = xSeg_full(trimStart : end);
-        ySeg_full  = ySeg_full(trimStart : end);
-
-        % Trim 2 ('both' only): remove the pick-up phase where the cursor is at
-        % the inner-circle image before dragging outward.  The drag phase begins
-        % at the first sample where the cursor is closer to any outer slot than
-        % to any inner-circle image (i.e., the cursor has left image territory).
-        if strcmp(reportType, 'both') && ~isempty(distStimMat)
-            dStim = distStimMat(segMask, :);      % [nSegSamp × 6] inner-image distances
-            dStim = dStim(trimStart : end, :);     % align with trimStart
-            dSlot = distSeg(trimStart : end, :);   % outer-slot distances, same trim
-
-            inInner   = min(dStim, [], 2) < min(dSlot, [], 2);
-            lastInner = find(inInner, 1, 'last');
-            leftDrag  = 1;
-            if ~isempty(lastInner)
-                leftDrag = lastInner + 1;
-            end
-            % Pick-up time: total time the cursor spent nearest to the specific
-            % image that was eventually picked up and dragged to the slot.
-            % The picked-up image is identified as the nearest inner-circle image
-            % at lastInner (the final pick-up sample, just before drag onset).
-            % Time is summed over all pick-up phase intervals where that specific
-            % image is the closest inner-circle stimulus — analogous to dwellTime
-            % for the drag phase, but measured in the inner-circle zone.
-            if ~isempty(lastInner) && lastInner < length(tSeg)
-                % Identify the picked-up image from the trajectory: the nearest
-                % inner-circle image at the last pick-up sample (just before drag).
-                [~, pickedUpImg]  = min(dStim(lastInner, :));
-                [~, nearestInner] = min(dStim, [], 2);   % [nSampTrimmed × 1]
-                dt_seg = diff(tSeg);                      % [nSampTrimmed-1 × 1]
-                atPickedImg   = nearestInner(1:end-1) == pickedUpImg;
-                inPickupPhase = inInner(1:end-1);
-                pickupTime(iChoice)       = sum(dt_seg(atPickedImg & inPickupPhase));
-                pickupConsistent(iChoice) = 1;   % valid pick-up phase detected
-            else
-                % No pick-up phase detected (cursor never entered inner zone).
-                pickupTime(iChoice)       = 0;
-                pickupConsistent(iChoice) = 0;
-            end
-            closestIdx = closestIdx(leftDrag : end);
-            tSeg       = tSeg(leftDrag : end);
-
-            % selSpeed over drag phase only (inner → outer slot, no return trip).
-            xDrag = xSeg_full(leftDrag : end);
-            yDrag = ySeg_full(leftDrag : end);
-            if length(xDrag) > 1
-                dragLen  = sum(sqrt(diff(xDrag).^2 + diff(yDrag).^2));
-                dragTime = tSeg(end) - tSeg(1);
-                if dragTime > 0
-                    selSpeed(iChoice) = dragLen / dragTime;
-                end
-            end
+            closestIdx = closestIdx(leftPrev : end);
+            tSeg       = tSeg(leftPrev : end);
         end
 
         if length(closestIdx) < 2
@@ -1841,8 +1511,6 @@ for iRep = 1 : length(mouse_data)
         interClickTime = [interClickTime, pad];
         selSpeed       = [selSpeed,       pad];
         dwellTime      = [dwellTime,      pad];
-        pickupTime        = [pickupTime,        pad];
-        pickupConsistent  = [pickupConsistent,  pad];
     end
 
     % Accuracy-conditioned collapsed metrics (mean across transitions per trial).
@@ -1869,21 +1537,16 @@ for iRep = 1 : length(mouse_data)
     incorrMask_sp  = (isCorrect == 0) & ~isnan(selSpeed);
     corrMask_dw    = (isCorrect == 1) & ~isnan(dwellTime);
     incorrMask_dw  = (isCorrect == 0) & ~isnan(dwellTime);
-    corrMask_pk    = (isCorrect == 1) & ~isnan(pickupTime);
-    incorrMask_pk  = (isCorrect == 0) & ~isnan(pickupTime);
 
     interClickTime_corr   = NaN; interClickTime_incorr = NaN;
     selSpeed_corr         = NaN; selSpeed_incorr        = NaN;
     dwellTime_corr        = NaN; dwellTime_incorr       = NaN;
-    pickupTime_corr       = NaN; pickupTime_incorr      = NaN;
     if any(corrMask_ict),   interClickTime_corr   = mean(interClickTime(corrMask_ict));   end
     if any(incorrMask_ict), interClickTime_incorr = mean(interClickTime(incorrMask_ict)); end
     if any(corrMask_sp),    selSpeed_corr         = mean(selSpeed(corrMask_sp));          end
     if any(incorrMask_sp),  selSpeed_incorr       = mean(selSpeed(incorrMask_sp));        end
     if any(corrMask_dw),    dwellTime_corr        = mean(dwellTime(corrMask_dw));         end
     if any(incorrMask_dw),  dwellTime_incorr      = mean(dwellTime(incorrMask_dw));       end
-    if any(corrMask_pk),    pickupTime_corr       = mean(pickupTime(corrMask_pk));        end
-    if any(incorrMask_pk),  pickupTime_incorr     = mean(pickupTime(incorrMask_pk));      end
 
     mouse_data(iRep).nResp                = nResp;
     mouse_data(iRep).chosenSlots         = chosenSlots;
@@ -1901,16 +1564,12 @@ for iRep = 1 : length(mouse_data)
     mouse_data(iRep).interClickTime       = interClickTime;
     mouse_data(iRep).selSpeed             = selSpeed;
     mouse_data(iRep).dwellTime            = dwellTime;
-    mouse_data(iRep).pickupTime           = pickupTime;
-    mouse_data(iRep).pickupConsistent     = pickupConsistent;
     mouse_data(iRep).interClickTime_corr  = interClickTime_corr;
     mouse_data(iRep).interClickTime_incorr= interClickTime_incorr;
     mouse_data(iRep).selSpeed_corr        = selSpeed_corr;
     mouse_data(iRep).selSpeed_incorr      = selSpeed_incorr;
     mouse_data(iRep).dwellTime_corr       = dwellTime_corr;
     mouse_data(iRep).dwellTime_incorr     = dwellTime_incorr;
-    mouse_data(iRep).pickupTime_corr      = pickupTime_corr;
-    mouse_data(iRep).pickupTime_incorr    = pickupTime_incorr;
 end
 end
 
@@ -1937,11 +1596,11 @@ end
 
 
 function s = pToSigStr(p)
-    if isnan(p),       s = 'n/a';
-    elseif p < 0.001,  s = '***';
-    elseif p < 0.01,   s = '**';
-    elseif p < 0.05,   s = '*';
-    else,              s = 'ns';
+% Convert a p-value to a significance label string.
+    if     p < 0.001, s = '***';
+    elseif p < 0.01,  s = '**';
+    elseif p < 0.05,  s = '*';
+    else,             s = 'ns';
     end
 end
 
