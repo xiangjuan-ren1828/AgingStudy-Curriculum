@@ -358,7 +358,7 @@ for iConds = 1 : length(condsList)
     end
 end
 %% ------ save the trajectory data for subsequent statistical tests ------
-save([CLdata_folder, 'trajCell_allConds_YAOA.mat'], 'trajCell_allConds');
+% save([CLdata_folder, 'trajCell_allConds_YAOA.mat'], 'trajCell_allConds');
 
 %% Consistency check: trajectory-inferred pick-up vs response data (Full report)
 % Prints a per-group summary table and plots match rate by sequential position.

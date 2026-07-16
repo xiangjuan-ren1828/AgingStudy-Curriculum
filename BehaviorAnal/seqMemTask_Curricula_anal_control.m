@@ -1,4 +1,8 @@
-% seqMemTask_Curricula_anal_summary.m
+% seqMemTask_Curricula_anal_control.m
+% write by XR @ July 14 2026 based on seqMemTask_Curricula_anal_summary.m
+% Using the Null model or the Independent model to generate synthetic
+% responses and then quantify the chance level performance of transition
+% and bindings
 % ===========================================
 % re-edited by XR @ April 3 2026
 % based on seqMemTask_v2_anal_summary.m and
@@ -46,7 +50,7 @@ yCir   = RChunk * sin(angCir) + centerY;
 
 expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
 nCond   = length(expList);
-expId   = expList{3};
+expId   = expList{1};
 if isequal(expId, 'interleaved')
     subjList_young = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
                       '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
@@ -219,6 +223,7 @@ imgNameList = {'car', 'castle', 'cat', 'cream', 'female', 'hat', 'key', 'sunflow
 similaritySource_list = {'CLIP', 'DINOv2', 'WordNet'};
 similarityId          = 1;
 similaritySource      = similaritySource_list{similarityId};
+imgIdxMap = containers.Map(imgNameList, 1 : 8);
 if isequal(similaritySource, 'CLIP')
     confMat_dir = [CLscript_folder, similaritySource, '_results/'];
     confMat     = load([confMat_dir, similaritySource, '_visual_similarity.mat']);
@@ -230,7 +235,6 @@ elseif isequal(similaritySource, 'DINOv2')
     conSimMat   = confMat.visSimMat;
 
 elseif isequal(similaritySource, 'WordNet')
-    imgIdxMap   = containers.Map(imgNameList, 1 : 8);
     conSimMat   = [
                     %   car     castle  cat     cream   female  hat     key     sunflower
                     1.0000  0.5000  0.3200  0.6316  0.4211  0.5000  0.6316  0.3478;  % car
@@ -245,6 +249,40 @@ elseif isequal(similaritySource, 'WordNet')
 end
 conProxK = 2; % number of most-similar alternatives that count as "proximal"
 
+%% Generating the responses either using the Null model or using the Independent transition learning model without any hypothesis about the binding
+% added by XR @ July 14 2026
+modelsList = {'Null', 'Independent'};
+modelId    = 1;
+modelUsed  = modelsList{modelId};
+if isequal(modelUsed, 'Null')
+    nDisp = nTrans + nDtr;
+    seq   = 1 : nDisp;
+    allPerms = perms(seq);
+    
+    % ------ Quantify chancel-level transition errors ------
+
+
+    % ------ Quantify chance-level of binding score ------
+
+
+
+    % ------ make a full combination between object and location dimension ------
+    allObjLoc = [];
+    
+
+elseif isequal(modelUsed, 'Independent')
+    % using indepedent model to simulate participants' responses to
+    % quantify the chance-level of binding score
+
+
+
+end
+
+% ------ also chance level in each order ------
+
+
+
+%% Quantify the pattern
 suffixWord = expId;
 for iGrp = 1 : nGroup %% younger and older adults
     if iGrp == 1
