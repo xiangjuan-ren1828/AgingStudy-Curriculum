@@ -3,6 +3,7 @@
 % Using the Null model or the Independent model to generate synthetic
 % responses and then quantify the chance level performance of transition
 % and bindings
+% Read the model-predicted results, saved in SeqMemTask_modelPred_main.m
 % ===========================================
 % re-edited by XR @ April 3 2026
 % based on seqMemTask_v2_anal_summary.m and
@@ -171,53 +172,17 @@ acc_subj_orderUP_group = cell(1, nGroup);
 trialPerc_group = cell(1, nGroup);
 % accuracy & RTs in each trial
 acc_trial_group = cell(1, nGroup);
-% post-test accuracy
-acc_group_post  = cell(1, nGroup);
-% ------accuracy for subsequent LMM analysis------
-acc_lmm_group          = [];
-choice_lmm_group       = [];
-acc_change_conds_group = [];           % memory drop: all trials together
-acc_change_conds_threeRetr_group = []; % memory drop: three-retrieval tests
-acc_change_conds_firstWin_group  = []; % memory drop: retrieval tests in the first reporting window
 
-% ------Binding related calculation------
-binds_conPctr_group       = cell(2, nGroup); % 2: marginal and reconstruction reports
-binds_conPctr_group_order = cell(2, nGroup); % 2: for partial retrieval, separating object-location and location-object trials
+% simulation times
+nSim = 50; % randomly generating 50 times of responses per participant
 
-% ------Transition evidence------
-transAcc_count_group            = cell(2, nGroup); % 2: marginal and joint
-transAcc_count_firstHalf_group  = cell(2, nGroup);
-transAcc_count_secondHalf_group = cell(2, nGroup);
+% ------Binding related calculation: the simulations (no full retrieval)------
+binds_conPctr_group  = cell(1, nGroup); 
 
-% ----------Integrate the following measures into one variable and use it for the subsequent correlation analysis with model parameters----------
-allMeas_inOne_group = cell(1, nGroup);
+% ------Transition evidence: the simulations (no full retrieval)------
+transAcc_count_group = cell(1, nGroup); 
 
-% ----------False alarm from the lure stimuli----------
-FA_lure_group = cell(1, nGroup);
-
-% ----choice (per slot) for the within-trial measures and between-trial measure (the data is partly overlapped)----
-choice_within_between_trials_group = [];
-
-% ------Location error proximity analysis------
-% 2 error types: [proximity, non-proximity] as proportions of all incorrect responses
-% Proximity = chosen slot is 45° (1 step) from true slot on the full 8-position circle.
-locErrType_group       = cell(1, nGroup);
-locErrByPos_group      = cell(1, nGroup);
-proxChance_group       = cell(1, nGroup); % empirical chance proximity rate per subject (overall)
-proxChanceByPos_group  = cell(1, nGroup); % per sequence-position chance rate per subject
-
-% ------Content error proximity analysis------
-% Proximity = chosen image is among the top-conProxK most similar images to the
-% true image, ranked across ALL 5 other displayed images (fixed per step).
-% The proximal set does NOT shrink as alternatives get occupied, preventing the
-% artifactual rise in proximity rate at later recall steps.
-% Chance at each step = (# proximal images still available) / (# total available).
-% Similarity: Wu-Palmer (WordNet). Image order: car=1 female=2 hat=3 sunflower=4 castle=5 cat=6 key=7 cream=8.
-conErrType_group        = cell(1, nGroup); % collapse transitions
-conErrByPos_group       = cell(1, nGroup); % separate transitions 
-conSimChance_group      = cell(1, nGroup);
-conSimChanceByPos_group = cell(1, nGroup);
-
+% ------Image confusion matrix------
 imgNameList = {'car', 'castle', 'cat', 'cream', 'female', 'hat', 'key', 'sunflower'};
 
 similaritySource_list = {'CLIP', 'DINOv2', 'WordNet'};
@@ -255,32 +220,14 @@ modelsList = {'Null', 'Independent'};
 modelId    = 1;
 modelUsed  = modelsList{modelId};
 if isequal(modelUsed, 'Null')
-    nDisp = nTrans + nDtr;
-    seq   = 1 : nDisp;
+    % ------ For each participant, randomly selected nTrial
+    % permutations from *allPerms* and repeat this process for
+    % multiplt time ------
+    nDisp    = nTrans + nDtr;
+    seq      = 1 : nDisp;
     allPerms = perms(seq);
-    
-    % ------ Quantify chancel-level transition errors ------
-
-
-    % ------ Quantify chance-level of binding score ------
-
-
-
-    % ------ make a full combination between object and location dimension ------
-    allObjLoc = [];
-    
-
-elseif isequal(modelUsed, 'Independent')
-    % using indepedent model to simulate participants' responses to
-    % quantify the chance-level of binding score
-
-
-
+    allPerms = allPerms(:, 1 : nTrans);
 end
-
-% ------ also chance level in each order ------
-
-
 
 %% Quantify the pattern
 suffixWord = expId;
@@ -316,59 +263,15 @@ for iGrp = 1 : nGroup %% younger and older adults
     % ------percentage of the fully correct trials------
     trialPerc_subj   = nan(subLen, 4); % 4: content, position, reconstruction, post-test
 
-    % ------accuracy for subsequent LMM analysis------
-    acc_lmm_subj          = [];
-    choice_lmm_subj       = []; % choice in each slot: 1-correct, 0-incorrect
-    acc_change_conds_subj = []; % memory drop: all trials together
-    acc_change_conds_threeRetr_subj = []; % memory drop: three-retrieval tests
-    acc_change_conds_firstWin_subj  = []; % memory drop: retrieval tests in the first reporting window
-
     % ------overall accuracy in 11 measurements------
     acc_dim_subj          = nan(subLen, 11); % post-test: (6) both; (7) content in both report; (8) position in both report; (9) both in recons-only; (10) content in recons-only; (11) position in recons-only
 
     % ------Binidng related measures------
-    binds_conPctr_marg_subj = nan(subLen, 4, 4); % the 2nd 2: (1-2) proportion: item on position and position on item; (3-4) detected response numbers
-    binds_conPctr_join_subj = nan(subLen, 4, 4);
-    % ======Separate retrievals: object-location or location-object
-    binds_conPctr_margIP_subj = nan(subLen, 4, 4); % the 2nd 2: (1-2) proportion: item on position and position on item; (3-4) detected response numbers
-    binds_conPctr_margPI_subj = nan(subLen, 4, 4);
+    binds_conPctr_marg_subj = nan(subLen, 4, 4, nSim); % the 2nd 2: (1-2) proportion: item on position and position on item; (3-4) detected response numbers
 
     % ------Transition evidence------
-    transAcc_count_marg_subj = nan(subLen, 4, 2); % 4: 4 different counts; 2: item and location
-    transAcc_count_join_subj = nan(subLen, 4, 2);
-    % ------Transition evidence for the 1st half and 2nd half per retrieval test------
-    transAcc_count_marg_firstHalf_subj  = nan(subLen, 4, 2);
-    transAcc_count_join_firstHalf_subj  = nan(subLen, 4, 2);
-    transAcc_count_marg_secondHalf_subj = nan(subLen, 4, 2);
-    transAcc_count_join_secondHalf_subj = nan(subLen, 4, 2);
+    transAcc_count_marg_subj = nan(subLen, 4, 2, nSim); % 4: 4 different counts; 2: item and location
 
-    % ------False alarm from the lure stimuli------
-    FA_lure_subj = nan(subLen, 2, 2); % first 2: item and location; second 2: partial and full retrieval
-
-    % ----choice (per slot) for the within-trial measures and between-trial measure (the data is partly overlapped)----
-    choice_within_between_trials_subj = [];
-
-    % ------Location error proximity analysis per subject------
-    % Proximity = chosen slot is 45° away from the true slot on the full 8-position circle.
-    % All incorrect responses (including lure slot 6) are classified uniformly.
-    % locErrType_subj(:,1) = proximity error rate  (chosen slot is 45° / 1-step from true)
-    % locErrType_subj(:,2) = non-proximity error rate (chosen slot is ≥90° / ≥2-steps from true)
-    locErrType_subj  = nan(subLen, 2);
-    locErrByPos_subj = nan(subLen, nTrans, 2); % same broken down by sequence position 1-5
-    % proxChance_subj: empirical chance proximity rate (occupancy-adjusted):
-    % fraction of available-incorrect slots that are 45°-adjacent, averaged across all
-    % response positions and trials (earlier-occupied slots excluded from the pool).
-    proxChance_subj       = nan(subLen, 1);
-    proxChanceByPos_subj  = nan(subLen, nTrans); % same rate broken down by sequence position
-
-    % ------Content error proximity analysis per subject------
-    % conErrType_subj(:,1) = proximal error rate  (chosen image in top-conProxK similar available)
-    % conErrType_subj(:,2) = non-proximal error rate
-    % By-position breakdown uses recall step index (1-5, lure step excluded).
-    conErrType_subj        = nan(subLen, 2);
-    conErrByPos_subj       = nan(subLen, nTrans, 2);
-    conSimChance_subj      = nan(subLen, 1);
-    conSimChanceByPos_subj = nan(subLen, nTrans);
     %%
     for iSub = 1 : subLen
         subjBv = subj_list{iSub, 1};
@@ -587,193 +490,6 @@ for iGrp = 1 : nGroup %% younger and older adults
         choice_con_iSub(reconsOnly == 1, :) = [];
         choice_pos_iSub(reconsOnly == 1, :) = [];
 
-        %% ---- Location error proximity analysis ----
-        % Proximity: for an incorrect response, the chosen slot is directly adjacent
-        % (45° away, CW or CCW) to the true slot on the circle.
-        % Adjacency is determined from the actual (x,y) screen coordinates, so it is
-        % robust to different circle rotations across participants.
-        % Arc between two slots = shortest angular difference between their (x,y) positions.
-        % Adjacent  (col 1): arc < 67.5°  (i.e., the arc is ~45°, not ~90° or more)
-        % Non-adjacent (col 2): arc >= 67.5°
-        % Lure slot (slot 6) is included and treated the same as sequence slots.
-        % Chance is occupancy-adjusted: as responses are made in sequence-position order
-        % (j=1 first), earlier-occupied slots are excluded from the available pool.
-        locErrCnt          = zeros(1, 2);      % [proximity, non-proximity] raw counts
-        locErrByPos        = zeros(nTrans, 2); % same broken down by sequence position (1-5)
-        proxChanCnt        = 0;                % overall adjacent-available-slot count
-        proxChanTotal      = 0;                % overall denominator
-        proxChanCntByPos   = zeros(nTrans, 1); % per-position adjacent count
-        proxChanTotalByPos = zeros(nTrans, 1); % per-position denominator
-        proxThresh         = 3 * pi / 8;       % 67.5°: midpoint between 45° and 90°
-
-        for i = 1 : nEpi
-            if reconsOnly(i) == 0
-                pX            = posX_col{i};
-                pY            = posY_col{i};
-                locTrue_i     = locTrue_col{i};
-                locRep_i      = locRep_col{i};
-                occupiedSlots = [];
-
-                for j = 1 : (nTrans + nDtr)
-                    trueSlot = locTrue_i(j);
-                    repSlot  = locRep_i(j);
-
-                    if trueSlot == 6, continue; end  % distractor image: no proximity analysis
-                    seqPos     = trueSlot;
-                    theta_true = atan2(pY(trueSlot), pX(trueSlot));
-
-                    % Empirical chance: fraction of available incorrect slots that are adjacent
-                    availSlots = setdiff(1:(nTrans+nDtr), [trueSlot, occupiedSlots]);
-                    for kk = availSlots
-                        arc_kk = mod(atan2(pY(kk), pX(kk)) - theta_true, 2*pi);
-                        arc_kk = min(arc_kk, 2*pi - arc_kk);   % shortest arc, 0..pi
-                        isAdj  = arc_kk < proxThresh;
-                        proxChanCnt               = proxChanCnt               + isAdj;
-                        proxChanTotal             = proxChanTotal             + 1;
-                        proxChanCntByPos(seqPos)  = proxChanCntByPos(seqPos)  + isAdj;
-                        proxChanTotalByPos(seqPos) = proxChanTotalByPos(seqPos) + 1;
-                    end
-
-                    % Mark response slot as occupied before moving to next position
-                    if repSlot ~= 0
-                        occupiedSlots = [occupiedSlots, repSlot];
-                    end
-
-                    % Classify error
-                    if repSlot == 0,        continue; end
-                    if repSlot == trueSlot, continue; end
-
-                    arc_rep = mod(atan2(pY(repSlot), pX(repSlot)) - theta_true, 2*pi);
-                    arc_rep = min(arc_rep, 2*pi - arc_rep);   % shortest arc, 0..pi
-                    isProx  = arc_rep < proxThresh;
-
-                    if isProx
-                        locErrCnt(1)           = locErrCnt(1) + 1;
-                        locErrByPos(seqPos, 1) = locErrByPos(seqPos, 1) + 1;
-                    else
-                        locErrCnt(2)           = locErrCnt(2) + 1;
-                        locErrByPos(seqPos, 2) = locErrByPos(seqPos, 2) + 1;
-                    end
-                end
-            end
-        end
-
-        nErrTotal = sum(locErrCnt);
-        if nErrTotal > 0
-            locErrType_subj(iSub, :) = locErrCnt / nErrTotal;
-        end
-        for iP = 1 : nTrans
-            nErrPos = sum(locErrByPos(iP, :));
-            if nErrPos > 0
-                locErrByPos_subj(iSub, iP, :) = locErrByPos(iP, :) / nErrPos;
-            end
-        end
-        if proxChanTotal > 0
-            proxChance_subj(iSub) = proxChanCnt / proxChanTotal;
-        end
-        for iP = 1 : nTrans
-            if proxChanTotalByPos(iP) > 0
-                proxChanceByPos_subj(iSub, iP) = proxChanCntByPos(iP) / proxChanTotalByPos(iP);
-            end
-        end
-
-        %% ---- Content error proximity analysis ----
-        % Proximity: chosen image is among the top-conProxK most similar images to
-        % the true image, ranked across ALL 5 other displayed images (not just those
-        % still available). The proximal set is fixed once per step so it does not
-        % shrink as alternatives get occupied — this prevents the artifactual rise in
-        % proximity rate at later recall steps that occurs when ranking over the
-        % available pool only.
-        % Chance at each step = (# proximal images still available) / (# total available):
-        % this can decrease at later steps if proximal images were already used up.
-        % Display position 6 = lure; lure steps are excluded from classification but
-        % their chosen position is still tracked for occupancy.
-        % By-position breakdown uses the recall step counter (1-5) among non-lure steps.
-        conErrCnt            = zeros(1, 2);
-        conErrByPos_i        = zeros(nTrans, 2);
-        conSimChanCnt        = 0;
-        conSimChanTotal      = 0;
-        conSimChanCntByPos   = zeros(nTrans, 1);
-        conSimChanTotalByPos = zeros(nTrans, 1);
-
-        for i = 1 : nEpi
-            if reconsOnly(i) == 0
-                imgIds    = conSeqTrl_col{i};   % 1×6: image ID at each display position
-                conTrue_i = conTrue_col{i};     % 1×6: true display pos at each step
-                conRep_i  = conRep_col{i};      % 1×6: reported display pos at each step
-                occupiedPos = [];
-                seqStep     = 0;                % counts non-lure steps (1..nTrans)
-
-                for j = 1 : (nTrans + nDtr)
-                    truePos = conTrue_i(j);
-                    repPos  = conRep_i(j);
-                    isLure  = (truePos == 6);
-
-                    if ~isLure
-                        seqStep   = seqStep + 1;
-                        seqPos    = seqStep;
-                        trueImgId = imgIds(truePos);
-
-                        % Proximal set: top-conProxK of ALL 5 other displayed positions.
-                        % Fixed regardless of occupancy, so the definition does not change
-                        % as the available pool shrinks across steps.
-                        allOtherPos  = setdiff(1:(nTrans+nDtr), truePos);   % all 5 others
-                        allOtherSims = arrayfun(@(kk) conSimMat(trueImgId, imgIds(kk)), allOtherPos);
-                        [~, sortIdx] = sort(allOtherSims, 'descend');
-                        proxPos      = allOtherPos(sortIdx(1 : min(conProxK, length(allOtherPos))));
-
-                        % Chance: proximal images still available / total available
-                        availPos   = setdiff(1:(nTrans+nDtr), [truePos, occupiedPos]);
-                        nAvail     = length(availPos);
-                        nProxAvail = length(intersect(availPos, proxPos));
-                        conSimChanCnt               = conSimChanCnt               + nProxAvail;
-                        conSimChanTotal             = conSimChanTotal             + nAvail;
-                        conSimChanCntByPos(seqPos)  = conSimChanCntByPos(seqPos)  + nProxAvail;
-                        conSimChanTotalByPos(seqPos) = conSimChanTotalByPos(seqPos) + nAvail;
-                    end
-
-                    % Track occupied display position for both lure and non-lure steps
-                    if repPos ~= 0
-                        occupiedPos = [occupiedPos, repPos];
-                    end
-
-                    if isLure, continue; end  % no error classification for lure step
-
-                    % Classify error
-                    if repPos == 0,       continue; end
-                    if repPos == truePos, continue; end
-
-                    isProx = ismember(repPos, proxPos);
-                    if isProx
-                        conErrCnt(1)              = conErrCnt(1) + 1;
-                        conErrByPos_i(seqPos, 1)  = conErrByPos_i(seqPos, 1) + 1;
-                    else
-                        conErrCnt(2)              = conErrCnt(2) + 1;
-                        conErrByPos_i(seqPos, 2)  = conErrByPos_i(seqPos, 2) + 1;
-                    end
-                end
-            end
-        end
-
-        nErrCon = sum(conErrCnt);
-        if nErrCon > 0
-            conErrType_subj(iSub, :) = conErrCnt / nErrCon;
-        end
-        for iP = 1 : nTrans
-            nErrConPos = sum(conErrByPos_i(iP, :));
-            if nErrConPos > 0
-                conErrByPos_subj(iSub, iP, :) = conErrByPos_i(iP, :) / nErrConPos;
-            end
-        end
-        if conSimChanTotal > 0
-            conSimChance_subj(iSub) = conSimChanCnt / conSimChanTotal;
-        end
-        for iP = 1 : nTrans
-            if conSimChanTotalByPos(iP) > 0
-                conSimChanceByPos_subj(iSub, iP) = conSimChanCntByPos(iP) / conSimChanTotalByPos(iP);
-            end
-        end
-
         %% trial-by-trial full retrieval
         choice_both_iSub      = nan(nEpi, 5);
         choice_both_item_iSub = nan(nEpi, 5);
@@ -950,310 +666,6 @@ for iGrp = 1 : nGroup %% younger and older adults
         trialPerc_subj(iSub, 3) = length(find(rec_trials(1 : nEpi) == 1)) / nEpi; % length(find(rec_trials == 1)) / (nEpi + postTn);
         trialPerc_subj(iSub, 4) = length(find(rec_trials(nEpi + 1 : end) == 1)) / postTn;
 
-        %% save accuracy and choice for each subject for subsequent LMM and GLMM analysis (not used in the statistical test)
-        acc_trial_col = (squeeze(acc_trial_subj(iSub, [1, 2, 3], 1 : nEpi)))'; % nEpi * 3 meas
-        acc_col    = []; %% accuracy
-        trlCor_col = []; %% fully correct: 1-yes, 0-no
-        meas_col   = []; %% 3 measures
-        trlNo_col  = [];
-        repOrd_col = []; %% report orders after the encoding stage: 0-content+position+recon, 1-position+content+recon, 2-recon only
-        for iM = 1 : 3 %% 3 measures: content, position and reconstruction
-            acc_iM = acc_trial_col(:, iM);
-            trlNo_iM = (1 : 1 : nEpi)';
-            trlNo_iM(isnan(acc_iM)) = [];
-            repOrd_iM = testOrd;
-            repOrd_iM(isnan(acc_iM)) = []; % for the reconstruction only trials, the value in content and position reports will be NAN
-            if iM == 1    % content report
-                repOrd_iM(repOrd_iM == 1) = 2; % second report after the encoding stage
-                repOrd_iM(repOrd_iM == 0) = 1; % first report after the encoding stage
-            elseif iM == 2 % position report
-                repOrd_iM(repOrd_iM == 1) = 1; % first report after the encoding stage
-                repOrd_iM(repOrd_iM == 0) = 2; % second report after the encoding stage
-            elseif iM == 3 % reconstruction report
-                repOrd_iM(reconsOnly == 0) = 3; % third report after the encoding stage: (1) con+pos+recons; (2) pos+con+recons;
-                repOrd_iM(reconsOnly == 1) = 1; % first report after the encoding stage
-            end
-            acc_iM(isnan(acc_iM)) = [];
-            acc_col   = [acc_col; acc_iM];
-            trlCor_iM = acc_iM;
-            trlCor_iM(trlCor_iM ~= 1) = 0;
-            trlCor_col = [trlCor_col; trlCor_iM];
-            meas_col   = [meas_col; repmat(iM - 1, length(acc_iM), 1)];
-            trlNo_col  = [trlNo_col; trlNo_iM];
-            repOrd_col = [repOrd_col; repOrd_iM];
-        end
-        group_Col = repmat(iGrp - 1, length(acc_col), 1);
-        subj_Col  = repmat(iSub - 1, length(acc_col), 1);
-        acc_lmm_subj = [acc_lmm_subj; group_Col, subj_Col, trlNo_col, meas_col, acc_col, trlCor_col, repOrd_col];
-
-        %% 1. overall choice for Figure 2C: save choice in each slot for every subject for subsequent GLMM analysis
-        % added by rxj @ April 20 2025: also labeling the reporting window
-        %%% 2. choice according to chronological order (reporting window after the encoding stage): save choice in each slot for every subject for subsequent GLMM analysis
-        % added by rxj @ 01/30/2024
-        % correct (1) or incorrect (0) in each slot, each report and each trial
-        %          choice_con_iSub = nan(nEpi, 5); % 48 marginal report trials * 5 transitions
-        %          choice_pos_iSub = nan(nEpi, 5);
-        %          choice_both_iSub = nan(nEpi, 5);
-        choice_slot_con  = reshape(choice_con_iSub', [size(choice_con_iSub, 1) * nTrans, 1]);
-        choice_slot_pos  = reshape(choice_pos_iSub', [size(choice_pos_iSub, 1) * nTrans, 1]);
-        choice_slot_both = reshape(choice_both_iSub', [nEpi * nTrans, 1]);
-        choice_slot_both_con = reshape(choice_both_item_iSub', [size(choice_both_item_iSub, 1) * nTrans, 1]);
-        choice_slot_both_pos = reshape(choice_both_loc_iSub', [size(choice_both_loc_iSub, 1) * nTrans, 1]);
-
-        % label the reporting window for each report: 0-first, 1-second,
-        % 2-third (only for reconstruction in the 3-report trials)
-        testOrd_threeReports_con = (testOrd(reconsOnly == 0))';  % one row; 0-item report in 1st reporting window; 1-item in 2nd reporting window;
-        testOrd_threeReports_pos = testOrd_threeReports_con - 1;
-        testOrd_threeReports_pos(testOrd_threeReports_pos == -1) = 1; % 0-location report in 1st reporting window; 1-location in 2nd reporting window;
-
-        testOrd_both = (reconsOnly - 1)';     % 0: the 1st reporting window
-        testOrd_both(testOrd_both == -1) = 2; % 2: the 3rd reporting window
-
-        repWin_slot_con  = reshape(repmat(testOrd_threeReports_con, nTrans, 1), [length(testOrd_threeReports_con) * nTrans, 1]);
-        repWin_slot_pos  = reshape(repmat(testOrd_threeReports_pos, nTrans, 1), [length(testOrd_threeReports_pos) * nTrans, 1]);
-        repWin_slot_both = reshape(repmat(testOrd_both, nTrans, 1), [length(testOrd_both) * nTrans, 1]);
-
-        choice_col = [];
-        repWin_col = [];
-        meas_col   = []; %% 3 measures
-        trlNo_col  = [];
-        slotNo_col = []; % each sequence contains 5 slots
-        for iM = 1 : 3 %% 3 measures: content, position and reconstruction
-            trlNo_iM = repmat((1 : 1 : nEpi)', 1, nTrans);
-            if iM == 1     % content report
-                choice_slot_iM = choice_slot_con;
-                repWin_slot_iM = repWin_slot_con;
-                trlNo_iM(reconsOnly == 1, :) = [];
-            elseif iM == 2 % position report
-                choice_slot_iM = choice_slot_pos;
-                repWin_slot_iM = repWin_slot_pos;
-                trlNo_iM(reconsOnly == 1, :) = [];
-            elseif iM == 3 % reconstruction report
-                choice_slot_iM = choice_slot_both;
-                repWin_slot_iM = repWin_slot_both;
-            end
-            choice_col = [choice_col; choice_slot_iM];
-            repWin_col = [repWin_col; repWin_slot_iM];
-            meas_col   = [meas_col; repmat(iM - 1, length(choice_slot_iM), 1)];
-            trlNo_col  = [trlNo_col; reshape(trlNo_iM', [size(trlNo_iM, 1) * size(trlNo_iM, 2), 1])];
-            slotNo_iM  = repmat((1 : 1 : nTrans) - 1, size(trlNo_iM, 1), 1);
-            slotNo_col = [slotNo_col; reshape(slotNo_iM', [size(slotNo_iM, 1) * size(slotNo_iM, 2), 1])];
-
-        end
-        group_Col = repmat(iGrp - 1, length(choice_col), 1);
-        subj_Col  = repmat(iSub - 1, length(choice_col), 1);
-        choice_lmm_subj = [choice_lmm_subj; group_Col, subj_Col, trlNo_col, meas_col, slotNo_col, choice_col, repWin_col];
-
-        %% 2. overall choice for Figure 2C: save choice in each slot for 3-retrieval tests and reconstruction-only trials for subsequent GLMM analysis
-        % Two parts of the data (overlapped in the partial retrieval):
-        % (1) data for three-retrieval test trials
-        % (2) data for reconstruction-only trials
-
-        %%% ------3-reports trials (same as Experiment 1)------
-        % ---- trial number ----
-        trial_no_total   = (1 : 1 : nEpi)';
-        trial_no_partial = trial_no_total(reconsOnly == 0);
-        nTrial_marg = length(find(reconsOnly == 0));
-        nTrial_marg_tmp = reshape(repmat(trial_no_partial', nTrans, 1), [nTrial_marg * nTrans, 1]);
-        nTrial_marg_col = repmat(nTrial_marg_tmp, 3, 1); % 3 retrievals: object/location/full in the three-retrieval tests
-
-        % correct (1) or incorrect (0) in each slot, each report and each trial
-        %          choice_con_iSub = nan(nEpi, 5); % only three-retrieval trials: 48 marginal report trials * 5 transitions
-        %          choice_pos_iSub = nan(nEpi, 5);
-        %          choice_both_iSub = nan(nEpi, 5);
-        choice_obj_partial = reshape(choice_con_iSub', [nTrial_marg * nTrans, 1]);
-        choice_loc_partial = reshape(choice_pos_iSub', [nTrial_marg * nTrans, 1]);
-        choice_rec_partial_tmp = choice_both_iSub(reconsOnly == 0, :); 
-        choice_rec_partial = reshape(choice_rec_partial_tmp', [nTrial_marg * nTrans, 1]);
-        choice_partial_col = [choice_obj_partial; choice_loc_partial; choice_rec_partial];
-
-        choice_within_trials_iSub = [zeros(length(choice_partial_col), 1), ... % label the 3-reports trials
-                                     [zeros(nTrial_marg*nTrans, 1); ones(nTrial_marg*nTrans, 1); repmat(2, nTrial_marg*nTrans, 1)], .... % 3 retrievals: object/location/full in the three-retrieval tests
-                                     nTrial_marg_col, choice_partial_col];
-
-        %%% ------reports in the 1st reporting window (for marginal reports, the data is partly overlapped with 3-report trials)------
-        trial_no_obj_firstWin = trial_no_total(reconsOnly == 0 & testOrd == 0);
-        trial_no_loc_firstWin = trial_no_total(reconsOnly == 0 & testOrd == 1);
-        trial_no_rec_firstWin = trial_no_total(reconsOnly == 1);
-        trial_no_obj_firstWin_col = reshape(repmat(trial_no_obj_firstWin', nTrans, 1), [length(trial_no_obj_firstWin) * nTrans, 1]);
-        trial_no_loc_firstWin_col = reshape(repmat(trial_no_loc_firstWin', nTrans, 1), [length(trial_no_loc_firstWin) * nTrans, 1]);
-        trial_no_rec_firstWin_col = reshape(repmat(trial_no_rec_firstWin', nTrans, 1), [length(trial_no_rec_firstWin) * nTrans, 1]);
-
-        trial_marginal = testOrd(reconsOnly == 0); % delete the reconstruction only trials
-        choice_obj_firstWin = choice_con_iSub(trial_marginal == 0, :); % object retrieval in the first reporting window
-        choice_loc_firstWin = choice_pos_iSub(trial_marginal == 1, :); % location retrieval in the first reporting window
-        choice_rec_firstWin = choice_both_iSub(reconsOnly == 1, :); 
-        choice_obj_firstWin_col = reshape(choice_obj_firstWin', [size(choice_obj_firstWin, 1) * 5, 1]);
-        choice_loc_firstWin_col = reshape(choice_loc_firstWin', [size(choice_loc_firstWin, 1) * 5, 1]);
-        choice_rec_firstWin_col = reshape(choice_rec_firstWin', [size(choice_rec_firstWin, 1) * 5, 1]);
-        choice_firstWin = [choice_obj_firstWin_col; choice_loc_firstWin_col; choice_rec_firstWin_col];
-        nTrial_obj = length(choice_obj_firstWin_col);
-        nTrial_loc = length(choice_loc_firstWin_col);
-        nTrial_rec = length(choice_rec_firstWin_col);
-
-        choice_between_trials_iSub = [ones(length(choice_firstWin), 1), .... % label the reports in the first reporting window
-                                      [zeros(nTrial_obj, 1); ones(nTrial_loc, 1); repmat(2, nTrial_rec, 1)], ...
-                                      [trial_no_obj_firstWin_col; trial_no_loc_firstWin_col; trial_no_rec_firstWin_col], ...
-                                       choice_firstWin];
-
-        %%% ----------Label age group: 0-YA, 1-OA----------
-        groupType_col = repmat((iGrp - 1), [size(choice_within_trials_iSub, 1) + size(choice_between_trials_iSub, 1), 1]);
-
-        %%% ----------Label participant index----------
-        subj_col = repmat(iSub - 1, [size(choice_within_trials_iSub, 1) + size(choice_between_trials_iSub, 1), 1]);
-
-        %%% ----------Integrate the whole data set----------
-        choice_within_between_trials_iSub = [groupType_col, subj_col, ...
-                                             [choice_within_trials_iSub; choice_between_trials_iSub]];
-
-        choice_within_between_trials_subj = [choice_within_between_trials_subj; choice_within_between_trials_iSub];
-
-        %% 3. Memory drop in Figure 2C (figure plot in SI)
-        % added by rxj @ 02/01/2024
-        if iGrp == 2 % older group
-            % ------ (1) Memory drop based on all trials ------
-            acc_trial_col = (squeeze(acc_trial_subj(iSub, [1, 2, 3], 1 : nEpi)))'; % nEpi * 3 meas
-            % ----------calculate accuracy change relative to the younger----------
-            acc_trial_col(:, 1) = (acc_trial_col(:, 1) -  mean_young(1)) ./ mean_young(1);
-            acc_trial_col(:, 2) = (acc_trial_col(:, 2) -  mean_young(2)) ./ mean_young(2);
-            acc_trial_col(:, 3) = (acc_trial_col(:, 3) -  mean_young(3)) ./ mean_young(3);
-            acc_col    = []; %% accuracy
-            trlCor_col = []; %% fully correct: 1-yes, 0-no
-            meas_col   = []; %% 3 measures
-            trlNo_col  = [];
-            repOrd_col = []; %% report orders after the encoding stage: 0-content+position+recon, 1-position+content+recon, 2-recon only
-            for iM = 1 : 3 %% 3 measures: content, position and reconstruction
-                acc_iM = acc_trial_col(:, iM);
-                trlNo_iM = (1 : 1 : nEpi)';
-                trlNo_iM(isnan(acc_iM)) = [];
-                repOrd_iM = testOrd;
-                repOrd_iM(isnan(acc_iM)) = []; % for the reconstruction only trials, the value in content and position reports will be NAN
-                if iM == 1    % content report
-                    repOrd_iM(repOrd_iM == 1) = 2; % second report after the encoding stage
-                    repOrd_iM(repOrd_iM == 0) = 1; % first report after the encoding stage
-                elseif iM == 2 % position report
-                    repOrd_iM(repOrd_iM == 1) = 1; % first report after the encoding stage
-                    repOrd_iM(repOrd_iM == 0) = 2; % second report after the encoding stage
-                elseif iM == 3 % reconstruction report
-                    repOrd_iM(reconsOnly == 0) = 3; % third report after the encoding stage: (1) con+pos+recons; (2) pos+con+recons;
-                    repOrd_iM(reconsOnly == 1) = 1; % first report after the encoding stage
-                end
-                acc_iM(isnan(acc_iM)) = [];
-                acc_col   = [acc_col; acc_iM];
-                trlCor_iM = acc_iM;
-                trlCor_iM(trlCor_iM ~= 1) = 0;
-                trlCor_col = [trlCor_col; trlCor_iM];
-                meas_col   = [meas_col; repmat(iM - 1, length(acc_iM), 1)];
-                trlNo_col  = [trlNo_col; trlNo_iM];
-                repOrd_col = [repOrd_col; repOrd_iM];
-            end
-            group_Col  = repmat(iGrp - 1, length(acc_col), 1);
-            subj_Col   = repmat(iSub - 1, length(acc_col), 1);
-            acc_change_conds_subj = [acc_change_conds_subj; ...
-                                     group_Col, subj_Col, trlNo_col, meas_col, ...
-                                     acc_col, repOrd_col];
-
-
-            % ------ (2) Memory drop based only on three-retrieval trials ------
-            % To make this consistent with Exp1, the memory drop analysis only
-            % uses the data from !!!!!! three-retrieval-trials !!!!!!
-            acc_trial_all = (squeeze(acc_trial_subj(iSub, [1, 2, 3], 1 : nEpi)))'; % nEpi * 3 meas
-
-            acc_trial_threeRetr_col = acc_trial_all(reconsOnly == 0, :); % only three-retrieval trials: nEpi * 3 meas
-            % ----------calculate accuracy change relative to the younger----------
-            acc_trial_threeRetr_col(:, 1) = (acc_trial_threeRetr_col(:, 1) -  mean_young_threeRetr(1)) ./ mean_young_threeRetr(1);
-            acc_trial_threeRetr_col(:, 2) = (acc_trial_threeRetr_col(:, 2) -  mean_young_threeRetr(2)) ./ mean_young_threeRetr(2);
-            acc_trial_threeRetr_col(:, 3) = (acc_trial_threeRetr_col(:, 3) -  mean_young_threeRetr(3)) ./ mean_young_threeRetr(3);
-            % ---- trial number ----
-            trial_no_total   = (1 : 1 : nEpi)';
-            trial_no_partial = trial_no_total(reconsOnly == 0);
-            % ---- testOrd in three-retrieval trials ----
-            testOrd_partial  = testOrd(reconsOnly == 0);
-
-            acc_threeRetr_col    = []; %% accuracy
-            trlCor_threeRetr_col = []; %% fully correct: 1-yes, 0-no
-            meas_threeRetr_col   = []; %% 3 measures
-            trlNo_threeRetr_col  = [];
-            repOrd_threeRetr_col = []; %% report orders after the encoding stage: 0-content+position+recon, 1-position+content+recon, 2-recon only
-            for iM = 1 : 3 %% 3 measures: content, position and reconstruction
-                acc_iM = acc_trial_threeRetr_col(:, iM);
-                trlNo_iM = trial_no_partial;
-                trlNo_iM(isnan(acc_iM)) = [];
-                repOrd_iM = testOrd_partial;
-                repOrd_iM(isnan(acc_iM)) = []; % for the reconstruction only trials, the value in content and position reports will be NAN
-                if iM == 1    % content report
-                    repOrd_iM(repOrd_iM == 1) = 2; % second report after the encoding stage
-                    repOrd_iM(repOrd_iM == 0) = 1; % first report after the encoding stage
-                elseif iM == 2 % position report
-                    repOrd_iM(repOrd_iM == 1) = 1; % first report after the encoding stage
-                    repOrd_iM(repOrd_iM == 0) = 2; % second report after the encoding stage
-                elseif iM == 3 % reconstruction report
-                    repOrd_iM(:) = 3; % third report after the encoding stage: (1) con+pos+recons; (2) pos+con+recons;
-                end
-                acc_iM(isnan(acc_iM)) = [];
-                acc_threeRetr_col   = [acc_threeRetr_col; acc_iM];
-                trlCor_iM = acc_iM;
-                trlCor_iM(trlCor_iM ~= 1) = 0;
-                trlCor_threeRetr_col = [trlCor_threeRetr_col; trlCor_iM];
-                meas_threeRetr_col   = [meas_threeRetr_col; repmat(iM - 1, length(acc_iM), 1)];
-                trlNo_threeRetr_col  = [trlNo_threeRetr_col; trlNo_iM];
-                repOrd_threeRetr_col = [repOrd_threeRetr_col; repOrd_iM];
-            end
-            group_threeRetr_Col = repmat(iGrp - 1, length(acc_threeRetr_col), 1);
-            subj_threeRetr_Col  = repmat(iSub - 1, length(acc_threeRetr_col), 1);
-            acc_change_conds_threeRetr_subj = [acc_change_conds_threeRetr_subj; ...
-                                               group_threeRetr_Col, subj_threeRetr_Col, trlNo_threeRetr_col, meas_threeRetr_col, ...
-                                               acc_threeRetr_col, repOrd_threeRetr_col];
-
-
-            % ------ (3) Memory drop based on the partial retrievals in the
-            % three-retrieval trials and full retrievals from the
-            % retrieval-only trials (firstWin) ------
-            % acc_trial_all = (squeeze(acc_trial_subj(iSub, [1, 2, 3], 1 : nEpi)))'; % nEpi * 3 meas
-            acc_trial_firstWin_obj = acc_trial_all(reconsOnly == 0 & testOrd == 0, 1); % object retrieval in the first reporting window
-            acc_trial_firstWin_loc = acc_trial_all(reconsOnly == 0 & testOrd == 1, 2); % location retrieval in the first reporting window
-            acc_trial_firstWin_rec = acc_trial_all(reconsOnly == 1, 3); % full retrieval in the first reporting window
-            acc_trial_firstWin_col = nan(max([length(acc_trial_firstWin_obj), length(acc_trial_firstWin_loc), length(acc_trial_firstWin_rec)]), 3);
-            acc_trial_firstWin_col(1 : length(acc_trial_firstWin_obj), 1) = (acc_trial_firstWin_obj -  mean_young_firstWin(1)) ./ mean_young_firstWin(1);
-            acc_trial_firstWin_col(1 : length(acc_trial_firstWin_loc), 2) = (acc_trial_firstWin_loc -  mean_young_firstWin(2)) ./ mean_young_firstWin(2);
-            acc_trial_firstWin_col(1 : length(acc_trial_firstWin_rec), 3) = (acc_trial_firstWin_rec -  mean_young_firstWin(3)) ./ mean_young_firstWin(3);
-            % ---- trial number ----
-            trial_no_obj_firstWin = trial_no_total(reconsOnly == 0 & testOrd == 0);
-            trial_no_loc_firstWin = trial_no_total(reconsOnly == 0 & testOrd == 1);
-            trial_no_rec_firstWin = trial_no_total(reconsOnly == 1);
-
-            acc_firstWin_col    = []; %% accuracy
-            trlCor_firstWin_col = []; %% fully correct: 1-yes, 0-no
-            meas_firstWin_col   = []; %% 3 measures
-            trlNo_firstWin_col  = [];
-            repOrd_firstWin_col = []; %% report orders after the encoding stage: 0-content+position+recon, 1-position+content+recon, 2-recon only
-            for iM = 1 : 3 %% 3 measures: content, position and reconstruction
-                acc_iM = acc_trial_firstWin_col(:, iM);
-                if iM == 1    % content report
-                    trlNo_iM = trial_no_obj_firstWin;
-                elseif iM == 2 % position report
-                    trlNo_iM = trial_no_loc_firstWin;
-                elseif iM == 3 % reconstruction report
-                    trlNo_iM = trial_no_rec_firstWin;
-                end
-                repOrd_iM = ones(length(trlNo_iM), 1);
-                acc_iM(isnan(acc_iM)) = [];
-                acc_firstWin_col = [acc_firstWin_col; acc_iM];
-                trlCor_iM = acc_iM;
-                trlCor_iM(trlCor_iM ~= 1) = 0;
-                trlCor_firstWin_col = [trlCor_firstWin_col; trlCor_iM];
-                meas_firstWin_col   = [meas_firstWin_col; repmat(iM - 1, length(acc_iM), 1)];
-                trlNo_firstWin_col  = [trlNo_firstWin_col; trlNo_iM];
-                repOrd_firstWin_col = [repOrd_firstWin_col; repOrd_iM];
-            end
-            group_firstWin_Col = repmat(iGrp - 1, length(acc_firstWin_col), 1);
-            subj_firstWin_Col  = repmat(iSub - 1, length(acc_firstWin_col), 1);
-            acc_change_conds_firstWin_subj = [acc_change_conds_firstWin_subj; ...
-                                              group_firstWin_Col, subj_firstWin_Col, trlNo_firstWin_col, meas_firstWin_col, ...
-                                              acc_firstWin_col, repOrd_firstWin_col];
-
-        end
-
         %% ----------Transition accuracy and binding accuracy----------
         conTrue_threeRep  = conTrue_col(reconsOnly == 0);
         conRep_threeRep   = conRep_col(reconsOnly == 0);
@@ -1279,21 +691,52 @@ for iGrp = 1 : nGroup %% younger and older adults
             conRep_reconRep_mat(iEpi, :) = bothRep_reconsRep{iEpi}(1, 1 : nTrans);
             locRep_reconRep_mat(iEpi, :) = bothRep_reconsRep{iEpi}(2, 1 : nTrans);
         end
-        slotCorr_marg_con = nan(sum(~reconsOnly), nTrans); % 1: the response is correct; 0: incorrect response;
-        slotCorr_marg_pos = nan(sum(~reconsOnly), nTrans);
-        slotCorr_join_con = nan(nEpi, nTrans);
-        slotCorr_join_pos = nan(nEpi, nTrans);
-        for iTrans = 1 : (nTrans)
-            % ----Content reports in the marginal reports trials----
-            slotCorr_marg_con(:, iTrans) = (conRep_threeRep_mat(:, iTrans) == iTrans);
-            % ----Position reports in the marginal reports trials----
-            slotCorr_marg_pos(:, iTrans) = (locRep_threeRep_mat(:, iTrans) == iTrans);
 
-            % ----Content reports in the reconstruction reports trials----
-            slotCorr_join_con(:, iTrans) = (conRep_reconRep_mat(:, iTrans) == iTrans);
-            % ----Position reports in the reconstruction reports
-            % trials----
-            slotCorr_join_pos(:, iTrans) = (locRep_reconRep_mat(:, iTrans) == iTrans);
+        %%% ------ quantify the chance level of transition accuracy ------
+        % added by XR @ July 16 2026
+        % Let's say for both partial (object and location) retrievals, the correct responses are
+        % always [1,2,3,4,5], which means the two types of retrievals share
+        % the same chance level under NULL model
+
+        % ---- remove the responses with 6 (as in the real experiment, this
+        % is the distractor) ----
+        % no simulation for the full retrieval tests
+        if isequal(modelUsed, 'Null')
+            % ------ For each participant, randomly selected nTrial
+            % permutations from *allPerms* and repeat this process for
+            % multiplt time ------
+            % For each participant, randomly selected 50 times
+            conRep_threeRep_mat = nan(sum(~reconsOnly), nTrans, nSim); % 1: the response is correct; 0: incorrect response;
+            locRep_threeRep_mat = nan(sum(~reconsOnly), nTrans, nSim); 
+            for iSim = 1 : nSim
+                % ------ object sequence ------
+                permIdx  = randperm(size(allPerms, 1));
+                rnd_iSim = permIdx(1 : sum(~reconsOnly));
+                conRep_threeRep_mat(:, :, iSim) = allPerms(rnd_iSim, :);
+                % ------ location sequence ------
+                permIdx  = randperm(size(allPerms, 1));
+                rnd_iSim = permIdx(1 : sum(~reconsOnly));
+                locRep_threeRep_mat(:, :, iSim) = allPerms(rnd_iSim, :);
+            end
+
+        elseif isequal(modelUsed, 'Independent')
+            % using indepedent model to simulate participants' responses to
+            % quantify the chance-level of binding score
+            conRep_threeRep_mat = slotCorr_con_pred;
+            locRep_threeRep_mat = slotCorr_pos_pred;
+
+        end
+
+        % ------ Binarize the responses (same as the original script) ------
+        slotCorr_marg_con = nan(sum(~reconsOnly), nTrans, nSim);% 1: the response is correct; 0: incorrect response;
+        slotCorr_marg_pos = nan(sum(~reconsOnly), nTrans, nSim); 
+        for iSim = 1 : nSim
+            for iTrans = 1 : (nTrans)
+                % ----Content reports in the marginal reports trials----
+                slotCorr_marg_con(:, iTrans, iSim) = (conRep_threeRep_mat(:, iTrans, iSim) == iTrans);
+                % ----Position reports in the marginal reports trials----
+                slotCorr_marg_pos(:, iTrans, iSim) = (locRep_threeRep_mat(:, iTrans, iSim) == iTrans);
+            end
         end
 
         %% ----------Transition evidence----------
@@ -1302,20 +745,13 @@ for iGrp = 1 : nGroup %% younger and older adults
         % categorize the four responses, given the transition is from X to
         % Y: (1) correct-X to Y; (2)incorrect-X to nonY; (3) incorrect-nonX
         % to Y; (4) incorrect-nonX to nonY
-        for ij = 1 : 2 % marginal and reconstruction
-            if ij == 1
-                slotCorr_con = slotCorr_marg_con;
-                slotCorr_pos = slotCorr_marg_pos;
-                transError_con = nan(sum(~reconsOnly), (nTrans - 1));
-                transError_pos = nan(sum(~reconsOnly), (nTrans - 1));
-                trlLen_temp = sum(~reconsOnly);
-            elseif ij == 2
-                slotCorr_con = slotCorr_join_con;
-                slotCorr_pos = slotCorr_join_pos;
-                transError_con = nan(nEpi, (nTrans - 1));
-                transError_pos = nan(nEpi, (nTrans - 1));
-                trlLen_temp = nEpi;
-            end
+        for ij = 1 : nSim % only partial retrieval; under NULL model condition, no distinction between object and location retrieval
+            slotCorr_con = slotCorr_marg_con(:, :, ij);
+            slotCorr_pos = slotCorr_marg_pos(:, :, ij);
+
+            transError_con = nan(sum(~reconsOnly), (nTrans - 1));
+            transError_pos = nan(sum(~reconsOnly), (nTrans - 1));
+            trlLen_temp = sum(~reconsOnly);
             for iTrans = 1 : (nTrans - 1)
                 % ----Content----
                 iTrans_from_con = slotCorr_con(:, iTrans);
@@ -1342,46 +778,17 @@ for iGrp = 1 : nGroup %% younger and older adults
 
             error_pos_len = [length(find(transError_loc_col == 1)), length(find(transError_loc_col == 2)), ...
                              length(find(transError_loc_col == 3)), length(find(transError_loc_col == 4))];
-            %%% ------ First and second half per retrieval test ------
-            transError_con_firstHalf_col = reshape(transError_con(:, 1:2), [trlLen_temp * 2, 1]);
-            transError_loc_firstHalf_col = reshape(transError_pos(:, 1:2), [trlLen_temp * 2, 1]);
-            error_con_firstThree_len = [length(find(transError_con_firstHalf_col == 1)), length(find(transError_con_firstHalf_col == 2)), ...
-                                        length(find(transError_con_firstHalf_col == 3)), length(find(transError_con_firstHalf_col == 4))];
-            error_pos_firstThree_len = [length(find(transError_loc_firstHalf_col == 1)), length(find(transError_loc_firstHalf_col == 2)), ...
-                                        length(find(transError_loc_firstHalf_col == 3)), length(find(transError_loc_firstHalf_col == 4))];
-            transError_con_secondHalf_col = reshape(transError_con(:, 3:4), [trlLen_temp * 2, 1]);
-            transError_loc_secondHalf_col = reshape(transError_pos(:, 3:4), [trlLen_temp * 2, 1]);
-            error_con_secondThree_len = [length(find(transError_con_secondHalf_col == 1)), length(find(transError_con_secondHalf_col == 2)), ...
-                                         length(find(transError_con_secondHalf_col == 3)), length(find(transError_con_secondHalf_col == 4))];
-            error_pos_secondThree_len = [length(find(transError_loc_secondHalf_col == 1)), length(find(transError_loc_secondHalf_col == 2)), ...
-                                         length(find(transError_loc_secondHalf_col == 3)), length(find(transError_loc_secondHalf_col == 4))];
 
             % ---- proportion of correct responses if previous item
             % is 1) correctly or 2) incorrectly reported ----
             % transAcc_count_marg_subj = nan(subLen, 4, 2); % 4: 4 different counts; 2: item and location
             % transAcc_count_join_subj = nan(subLen, 4, 2);
-            if ij == 1
-                % ---- Item ----
-                transAcc_count_marg_subj(iSub, :, 1) = error_con_len; % 4: 4 different counts; 2: item and location
-                transAcc_count_marg_firstHalf_subj(iSub, :, 1)  = error_con_firstThree_len;
-                transAcc_count_marg_secondHalf_subj(iSub, :, 1) = error_con_secondThree_len;
+            % No simulations for the full retrieval
+            % ---- Item ----
+            transAcc_count_marg_subj(iSub, :, 1, ij) = error_con_len; % 4: 4 different counts; 2: item and location
 
-                % ---- Location ----
-                transAcc_count_marg_subj(iSub, :, 2) = error_pos_len;
-                transAcc_count_marg_firstHalf_subj(iSub, :, 2)  = error_pos_firstThree_len;
-                transAcc_count_marg_secondHalf_subj(iSub, :, 2) = error_pos_secondThree_len;
-
-            elseif ij == 2
-                % ---- Item ----
-                transAcc_count_join_subj(iSub, :, 1) = error_con_len;
-                transAcc_count_join_firstHalf_subj(iSub, :, 1)  = error_con_firstThree_len;
-                transAcc_count_join_secondHalf_subj(iSub, :, 1) = error_con_secondThree_len;
-
-                % ---- Location ----
-                transAcc_count_join_subj(iSub, :, 2) = error_pos_len;
-                transAcc_count_join_firstHalf_subj(iSub, :, 2)  = error_pos_firstThree_len;
-                transAcc_count_join_secondHalf_subj(iSub, :, 2) = error_pos_secondThree_len;
-            end
+            % ---- Location ----
+            transAcc_count_marg_subj(iSub, :, 2, ij) = error_pos_len;
         end
 
         %% ----------Binding evidence----------
@@ -1391,14 +798,10 @@ for iGrp = 1 : nGroup %% younger and older adults
         % Hypothesis: if participants real use the binding information,
         % then there should be significant difference between the two kinds
         % of trials
-        for ij = 1 : 2 % marginal and reconstruction
-            if ij == 1
-                slotCorr_con = slotCorr_marg_con;
-                slotCorr_pos = slotCorr_marg_pos;
-            elseif ij == 2
-                slotCorr_con = slotCorr_join_con;
-                slotCorr_pos = slotCorr_join_pos;
-            end
+        for ij = 1 : nSim
+            slotCorr_con = slotCorr_marg_con(:, :, ij);
+            slotCorr_pos = slotCorr_marg_pos(:, :, ij);
+
             binds_conPctr_counts = cell(2, 4); % 2: (Item|Pos) and (Pos|Item)
             for ijT = 1 : size(slotCorr_pos, 1)
                 slotCorr_con_ij = slotCorr_con(ijT, :);
@@ -1436,138 +839,16 @@ for iGrp = 1 : nGroup %% younger and older adults
                 end
             end
             % ------Calculate the proportion of correctness------
-            if ij == 1
-                for iC = 1 : 4
-                    % ------Proportion------
-                    % ****** the denominator is the total data points in each catetory ******
-                    binds_conPctr_marg_subj(iSub, iC, 1) = length(find(binds_conPctr_counts{1, iC} == 1)) ./ length(binds_conPctr_counts{1, iC});
-                    binds_conPctr_marg_subj(iSub, iC, 2) = length(find(binds_conPctr_counts{2, iC} == 1)) ./ length(binds_conPctr_counts{2, iC});
-                    % ------Trial numbers------
-                    binds_conPctr_marg_subj(iSub, iC, 3) = length(find(binds_conPctr_counts{1, iC} == 1)) ./ length(cell2mat((binds_conPctr_counts(1, :))'));
-                    binds_conPctr_marg_subj(iSub, iC, 4) = length(find(binds_conPctr_counts{2, iC} == 1)) ./ length(cell2mat((binds_conPctr_counts(2, :))'));
-                end
-
-            elseif ij == 2
-                for iC = 1 : 4
-                    % ------Proportion------
-                    % ****** the denominator is the total data points in each catetory ******
-                    binds_conPctr_join_subj(iSub, iC, 1) = length(find(binds_conPctr_counts{1, iC} == 1)) ./ length(binds_conPctr_counts{1, iC});
-                    binds_conPctr_join_subj(iSub, iC, 2) = length(find(binds_conPctr_counts{2, iC} == 1)) ./ length(binds_conPctr_counts{2, iC});
-                    % ------Trial numbers------
-                    binds_conPctr_join_subj(iSub, iC, 3) = length(find(binds_conPctr_counts{1, iC} == 1)) ./ length(cell2mat((binds_conPctr_counts(1, :))'));
-                    binds_conPctr_join_subj(iSub, iC, 4) = length(find(binds_conPctr_counts{2, iC} == 1)) ./ length(cell2mat((binds_conPctr_counts(2, :))'));
-                end
+            for iC = 1 : 4
+                % ------Proportion------
+                % ****** the denominator is the total data points in each catetory ******
+                binds_conPctr_marg_subj(iSub, iC, 1, ij) = length(find(binds_conPctr_counts{1, iC} == 1)) ./ length(binds_conPctr_counts{1, iC});
+                binds_conPctr_marg_subj(iSub, iC, 2, ij) = length(find(binds_conPctr_counts{2, iC} == 1)) ./ length(binds_conPctr_counts{2, iC});
+                % ------Trial numbers------
+                binds_conPctr_marg_subj(iSub, iC, 3, ij) = length(find(binds_conPctr_counts{1, iC} == 1)) ./ length(cell2mat((binds_conPctr_counts(1, :))'));
+                binds_conPctr_marg_subj(iSub, iC, 4, ij) = length(find(binds_conPctr_counts{2, iC} == 1)) ./ length(cell2mat((binds_conPctr_counts(2, :))'));
             end
         end
-
-        %% Binding evidence: by splitting object-location and location-object trials
-        testOrd_threeRetr = testOrd(~reconsOnly);
-        for ij = 1 : 2 % 2 types of report trials: 1) item-pos; 2) pos-item;
-            if ij == 1     % retrieval order: object-location
-                slotCorr_con = slotCorr_marg_con(testOrd_threeRetr == 0, :);
-                slotCorr_pos = slotCorr_marg_pos(testOrd_threeRetr == 0, :);
-            elseif ij == 2 % retriveal order: location-object
-                slotCorr_con = slotCorr_marg_con(testOrd_threeRetr == 1, :);
-                slotCorr_pos = slotCorr_marg_pos(testOrd_threeRetr == 1, :);
-            end
-            binds_conPctr_counts = cell(2, 4); % 2: (Item|Pos) and (Pos|Item)
-            for ijT = 1 : size(slotCorr_pos, 1)
-                slotCorr_con_ij = slotCorr_con(ijT, :);
-                slotCorr_pos_ij = slotCorr_pos(ijT, :);
-                % +++++++++++++++++ (Item|Pos) +++++++++++++++++
-                for iTr = 2 : nTrans
-                    if slotCorr_con_ij(iTr - 1) == 1 && slotCorr_pos_ij(iTr) == 1
-                        binds_conPctr_counts{1, 1} = [binds_conPctr_counts{1, 1}; slotCorr_con_ij(iTr)];
-
-                    elseif slotCorr_con_ij(iTr - 1) == 1 && slotCorr_pos_ij(iTr) == 0
-                        binds_conPctr_counts{1, 2} = [binds_conPctr_counts{1, 2}; slotCorr_con_ij(iTr)];
-
-                    elseif slotCorr_con_ij(iTr - 1) == 0 && slotCorr_pos_ij(iTr) == 1
-                        binds_conPctr_counts{1, 3} = [binds_conPctr_counts{1, 3}; slotCorr_con_ij(iTr)];
-
-                    elseif slotCorr_con_ij(iTr - 1) == 0 && slotCorr_pos_ij(iTr) == 0
-                        binds_conPctr_counts{1, 4} = [binds_conPctr_counts{1, 4}; slotCorr_con_ij(iTr)];
-
-                    end
-                end
-                % +++++++++++++++++ (Pos|Item) +++++++++++++++++
-                for iTr = 2 : nTrans
-                    if slotCorr_pos_ij(iTr - 1) == 1 && slotCorr_con_ij(iTr) == 1
-                        binds_conPctr_counts{2, 1} = [binds_conPctr_counts{2, 1}; slotCorr_pos_ij(iTr)];
-
-                    elseif slotCorr_pos_ij(iTr - 1) == 1 && slotCorr_con_ij(iTr) == 0
-                        binds_conPctr_counts{2, 2} = [binds_conPctr_counts{2, 2}; slotCorr_pos_ij(iTr)];
-
-                    elseif slotCorr_pos_ij(iTr - 1) == 0 && slotCorr_con_ij(iTr) == 1
-                        binds_conPctr_counts{2, 3} = [binds_conPctr_counts{2, 3}; slotCorr_pos_ij(iTr)];
-
-                    elseif slotCorr_pos_ij(iTr - 1) == 0 && slotCorr_con_ij(iTr) == 0
-                        binds_conPctr_counts{2, 4} = [binds_conPctr_counts{2, 4}; slotCorr_pos_ij(iTr)];
-                    end
-                end
-            end
-            % ------Calculate the proportion of correctness------
-            if ij == 1    % object-location retrieval trials
-                for iC = 1 : 4
-                    % ------Proportion------
-                    binds_conPctr_margIP_subj(iSub, iC, 1) = length(find(binds_conPctr_counts{1, iC} == 1)) ./ length(binds_conPctr_counts{1, iC});
-                    binds_conPctr_margIP_subj(iSub, iC, 2) = length(find(binds_conPctr_counts{2, iC} == 1)) ./ length(binds_conPctr_counts{2, iC});
-                    % ------Trial numbers------
-                    binds_conPctr_margIP_subj(iSub, iC, 3) = length(binds_conPctr_counts{1, iC});
-                    binds_conPctr_margIP_subj(iSub, iC, 4) = length(binds_conPctr_counts{2, iC});
-                end
-            elseif ij == 2 % location-object retrieval trials
-                for iC = 1 : 4
-                    % ------Proportion------
-                    binds_conPctr_margPI_subj(iSub, iC, 1) = length(find(binds_conPctr_counts{1, iC} == 1)) ./ length(binds_conPctr_counts{1, iC});
-                    binds_conPctr_margPI_subj(iSub, iC, 2) = length(find(binds_conPctr_counts{2, iC} == 1)) ./ length(binds_conPctr_counts{2, iC});
-                    % ------Trial numbers------
-                    binds_conPctr_margPI_subj(iSub, iC, 3) = length(binds_conPctr_counts{1, iC});
-                    binds_conPctr_margPI_subj(iSub, iC, 4) = length(binds_conPctr_counts{2, iC});
-                end
-            end
-        end
-        
-        %% Calculate the lure effect from the distractor
-        % item and location in partial and full retrieval separately
-        conLure  = nan(nEpi, 1);
-        locLure  = nan(nEpi, 1);
-        bothLure = zeros(nEpi, 2); % 2: item and location dimension in the full retrieval
-        % ---------- note down the trial index where the lure stimulus was picked ----------
-        lure_trialIdx = zeros(nEpi, 3); % 3: item, location and full retrieval
-        for i = 1 : nEpi
-            if reconsOnly(i) == 0 %% non reconstruction only trial
-                % item retrieval
-                conTrue_i   = conTrue_col{i};
-                conRep_i    = conRep_col{i};
-                conLure_i   = find(conTrue_i == 6);
-                conRep_lure = conRep_i(conLure_i);
-                conLure(i)  = (conRep_lure ~= 0 | sum(conRep_i == 6) ~= 0); % check if the distractor image was picked
-
-                % location retrieval
-                locTrue_i   = locTrue_col{i};
-                locRep_i    = locRep_col{i};
-                locLure_i   = find(locTrue_i == 6); % always the last one
-                locRep_lure = locRep_i(locLure_i);
-                locLure(i)  = (locRep_lure ~= 0 | sum(locRep_i ==6) ~= 0); % check if the distractor location was picked: though sum(locRep_i ==6) ~= 0 is a redundant check in location retrieval
-            end
-            % full retrieval
-            bothRep_i      = bothRep_col{i}; % 2 row: content and position
-            bothLure(i, 1) = (sum(bothRep_i(1, :) == 6) | bothRep_i(1, end) ~= 0);
-            bothLure(i, 2) = (sum(bothRep_i(2, :) == 6) | bothRep_i(2, end) ~= 0);
-
-        end
-        % ---------- partial retrieval ----------
-        FA_lure_subj(iSub, 1, 1) = nansum(conLure) / sum(~reconsOnly);
-        FA_lure_subj(iSub, 2, 1) = nansum(locLure) / sum(~reconsOnly);
-
-        % ---------- full retrieval ----------
-        FA_lure_subj(iSub, 1, 2) = sum(bothLure(:, 1)) / nEpi;
-        FA_lure_subj(iSub, 2, 2) = sum(bothLure(:, 2)) / nEpi;
-
-        lure_trialIdx(:, 1) = conLure;
-        lure_trialIdx(:, 2) = locLure;
-        lure_trialIdx(:, 3) = (bothLure(:, 1) == 1 | bothLure(:, 2) == 1);
 
     end
     %%
@@ -1580,182 +861,28 @@ for iGrp = 1 : nGroup %% younger and older adults
     acc_subj_orderUP_group{iGrp} = acc_subj_orderUp;
     trialPerc_group{iGrp}        = trialPerc_subj;
     acc_dim_group{iGrp}          = acc_dim_subj;
-    acc_lmm_group          = [acc_lmm_group; acc_lmm_subj];
-    choice_lmm_group       = [choice_lmm_group; choice_lmm_subj];
-    choice_within_between_trials_group = [choice_within_between_trials_group; choice_within_between_trials_subj];
-    acc_change_conds_group = [acc_change_conds_group; acc_change_conds_subj]; % memory drop: all trials together
-    acc_change_conds_threeRetr_group = [acc_change_conds_threeRetr_group; acc_change_conds_threeRetr_subj]; % memory drop: three-retrieval tests
-    acc_change_conds_firstWin_group  = [acc_change_conds_firstWin_group; acc_change_conds_firstWin_subj]; % memory drop: retrieval tests in the first reporting window
 
     % ----binding evidence----
     binds_conPctr_group{1, iGrp} = binds_conPctr_marg_subj;
-    binds_conPctr_group{2, iGrp} = binds_conPctr_join_subj;
-    % ----binding evidence: separating object-location and location-object retrievals----
-    binds_conPctr_group_order{1, iGrp} = binds_conPctr_margIP_subj;
-    binds_conPctr_group_order{2, iGrp} = binds_conPctr_margPI_subj;
-
+    
     % ----transition evidence----
     transAcc_count_group{1, iGrp} = transAcc_count_marg_subj;
-    transAcc_count_group{2, iGrp} = transAcc_count_join_subj;
-    transAcc_count_firstHalf_group{1, iGrp} = transAcc_count_marg_firstHalf_subj;
-    transAcc_count_firstHalf_group{2, iGrp} = transAcc_count_join_firstHalf_subj;
-    transAcc_count_secondHalf_group{1, iGrp} = transAcc_count_marg_secondHalf_subj;
-    transAcc_count_secondHalf_group{2, iGrp} = transAcc_count_join_secondHalf_subj;
-
-    % ----------False alarm from the lure stimuli----------
-    FA_lure_group{iGrp} = FA_lure_subj;
-
-    % ----------Location error proximity analysis----------
-    locErrType_group{iGrp}      = locErrType_subj;
-    locErrByPos_group{iGrp}    = locErrByPos_subj;
-    proxChance_group{iGrp}     = proxChance_subj;
-    proxChanceByPos_group{iGrp} = proxChanceByPos_subj;
-
-    % ----------Content error proximity analysis----------
-    conErrType_group{iGrp}        = conErrType_subj;
-    conErrByPos_group{iGrp}       = conErrByPos_subj;
-    conSimChance_group{iGrp}      = conSimChance_subj;
-    conSimChanceByPos_group{iGrp} = conSimChanceByPos_subj;
-
-    % ----------post-test accuracy across three learning curricula----------
-    acc_group_post{iGrp} = acc_group{iGrp}(:, 6);
-
-
-    %% calculate the mean across subjects, for each report
-    if iGrp == 1 % younger group
-        % ------ all trials together ------
-        mean_young = nan(1, 3);
-        mean_young(1) = nanmean(acc_group{1}(:, 1)); % content
-        mean_young(2) = nanmean(acc_group{1}(:, 2)); % position
-        mean_young(3) = nanmean(acc_group{1}(:, 3)); % reconstruction
-
-        % ------ three-retrieval trials ------
-        %%% ------The non-reconsOnly trials: 3 consecutive reports (same as Experiment 1)------
-        % ----content----
-        % acc_subj(iSub, 9)  = nanmean(acc_trial_con_iSub);
-        % ----position----
-        % acc_subj(iSub, 10) = nanmean(acc_trial_pos_iSub);
-        % ----reconstruction----
-        % acc_subj(iSub, 11) = nanmean(acc_trial_rec_iSub);
-        
-        mean_young_threeRetr = nan(1, 3);
-        mean_young_threeRetr(1) = nanmean(acc_subj(:, 9));
-        mean_young_threeRetr(2) = nanmean(acc_subj(:, 10));
-        mean_young_threeRetr(3) = nanmean(acc_subj(:, 11));
-
-        % ------ partial retrievals in the three-retrieval trials (firstWin) + full retrieval from retrieval-only trials (firstWin)------
-        % content-first, position-first, and recons-only trials
-        % acc_subj_orderUp(iSub, 1, 1) = nanmean(acc_marginal(trial_marginal == 0, 1));
-        % acc_subj_orderUp(iSub, 1, 2) = nanmean(acc_marginal(trial_marginal == 1, 2));
-        % acc_subj_orderUp(iSub, 1, 3) = nanmean(acc_reconsOnly(:, 3));
-
-        mean_young_firstWin = nan(1, 3);
-        mean_young_firstWin(1) = nanmean(acc_subj_orderUp(:, 1, 1));
-        mean_young_firstWin(2) = nanmean(acc_subj_orderUp(:, 1, 2));
-        mean_young_firstWin(3) = nanmean(acc_subj_orderUp(:, 1, 3));
-
-    end
-
-    %% ----------Integrate the following measures into one variable and use it for the subsequent correlation analysis with model parameters----------
-    allMeas_inOne = nan(subLen, 8);
-    % (1) accuracy for itemReport
-    allMeas_inOne(:, 1) = acc_subj(:, 1);
-    % (2) accuracy for posReport
-    allMeas_inOne(:, 2) = acc_subj(:, 2);
-    % (3) accuracy for the difference between itemReport and posReport (itemReport - posReport)
-    allMeas_inOne(:, 3) = acc_subj(:, 1) - acc_subj(:, 2);
-    % (4) accuracy for reconstruction report
-    allMeas_inOne(:, 4) = acc_subj(:, 3);
-    % (5) accuracy for prediction from marginal reports
-    allMeas_inOne(:, 5) = acc_subj(:, 12);
-    % (6) difference between reconstruction report and prediction from
-    % marginal reports
-    allMeas_inOne(:, 6) = acc_subj(:, 3) - acc_subj(:, 12);
-    % (7) binding score for item | pos in marginal reports
-    % ------calculate the cost (reversed) and benefit and then average the two------
-    allMeas_inOne(:, 7) = nanmean([binds_conPctr_marg_subj(:, 1, 1) - binds_conPctr_marg_subj(:, 2, 1), ...
-                                   binds_conPctr_marg_subj(:, 3, 1) - binds_conPctr_marg_subj(:, 4, 1)], 2);
-    % (8) binding score for pos | item in marginal reports
-    % ------calculate the cost (reversed) and benefit and then average the two------
-    allMeas_inOne(:, 8) = nanmean([binds_conPctr_marg_subj(:, 1, 2) - binds_conPctr_marg_subj(:, 2, 2), ...
-                                   binds_conPctr_marg_subj(:, 3, 2) - binds_conPctr_marg_subj(:, 4, 2)], 2);
-    allMeas_inOne_group{iGrp} = allMeas_inOne;
 
 end
 
 %% save the data for YA+OA in each condition
 %% save the descriptive data
-save([CLdata_folder, 'acc_group_YAOA_', suffixWord, '.mat'], 'acc_group');
-save([CLdata_folder, 'acc_subj_orderUP_YAOA_', suffixWord, '.mat'], 'acc_subj_orderUP_group');
-save([CLdata_folder, 'FA_lure_YAOA_', suffixWord, '.mat'], 'FA_lure_group');
-save([CLdata_folder, 'binds_conPctr_YAOA_', suffixWord, '.mat'], 'binds_conPctr_group');
-save([CLdata_folder, 'acc_group_post_YAOA_', suffixWord, '.mat'], 'acc_group_post');
+% save([CLdata_folder, 'acc_group_YAOA_', suffixWord, '.mat'], 'acc_group');
+% save([CLdata_folder, 'acc_subj_orderUP_YAOA_', suffixWord, '.mat'], 'acc_subj_orderUP_group');
+% save([CLdata_folder, 'FA_lure_YAOA_', suffixWord, '.mat'], 'FA_lure_group');
+% save([CLdata_folder, 'binds_conPctr_YAOA_', suffixWord, '.mat'], 'binds_conPctr_group');
+% save([CLdata_folder, 'acc_group_post_YAOA_', suffixWord, '.mat'], 'acc_group_post');
 
-%% save the data for statistical test in Figure 2C
-% ------ Memory gradient examination: 1) within-trials based on
-% three-retrieval test and 2) between-trials based on retrievals in the
-% first retrieval window
-save([CLdata_folder, 'choice_within_between_trials_stats_YAOA_', suffixWord, '.mat'], 'choice_within_between_trials_group');
 
-% ------ Memory drop (YA relative to OA): 1) all trials; 2) three-retrieval
-% test trials; 3) three types of retrievals in the first retrieval window
-% ------
-save([CLdata_folder, 'acc_change_conds_stats_YAOA_', suffixWord, '.mat'], 'acc_change_conds_group');
-save([CLdata_folder, 'acc_change_conds_threeRetr_stats_YAOA_', suffixWord, '.mat'], 'acc_change_conds_threeRetr_group');
-save([CLdata_folder, 'acc_change_conds_firstWin_stats_YAOA_', suffixWord, '.mat'], 'acc_change_conds_firstWin_group');
+% !!! Determine what should be saved for the subsequent analysis !!!
 
-%% reorganize the lure effect data for the subsequent statistical tests
-% added by XR @ Dec 4th 2025
-% variables: item vs. location, partial vs. full retrieval, YA vs. OA
-% FA_lure_subj   = nan(subLen, 2, 2); % first 2: item and location; second 2: partial and full retrieval
-% ---------- partial retrieval ----------
-% FA_lure_subj(iSub, 1, 1) = sum(conLure) / nEpi;
-% FA_lure_subj(iSub, 2, 1) = sum(locLure) / nEpi;
-% 
-% % ---------- full retrieval ----------
-% FA_lure_subj(iSub, 1, 2) = sum(bothLure(:, 1)) / nEpi;
-% FA_lure_subj(iSub, 2, 2) = sum(bothLure(:, 2)) / nEpi;
 
-FA_lure_overall_YAOA = []; 
-for iGrp = 1 : nGroup % YA and OA
-    if iGrp == 1
-        disp('------YA------')
-    elseif iGrp == 2
-        disp('------OA------')
-    end
-    FA_lure_iGrp = FA_lure_group{iGrp};
 
-    for ij = 1 : 2 % marginal and reconstruction
-        FA_lure_ij = FA_lure_iGrp(:, :, ij);
-
-        %% ------ data for the LMM test ------
-        for iCp = 1 : 2 % item and location
-            %%% ----------FA rate----------
-            FAlure_ij_iCp = FA_lure_ij(:, iCp);
-
-            subLen_tmp = size(FAlure_ij_iCp, 1); % subLen
-
-            %%% ----------Label age groups: 0-YA, 1-OA----------
-            groupType_col = repmat((iGrp - 1), [subLen_tmp, 1]);
-
-            %%% ----------Label report types: 0-marginal report, 1-reconstruction report----------
-            reportType_col = repmat((ij - 1), [subLen_tmp, 1]);
-
-            %%% ----------Item or Location sequence or dimension----------
-            dimType_col = repmat((iCp - 1), [subLen_tmp, 1]);
-
-            %%% ----------Label participant index----------
-            subj_col = (1 : 1 : subLen_tmp)' - 1;
-
-            %%% ----------Concatenate the transition calculation across loops----------
-            FA_lure_temp = [];
-            FA_lure_temp = [groupType_col, subj_col, reportType_col, dimType_col, FAlure_ij_iCp];
-            FA_lure_overall_YAOA = [FA_lure_overall_YAOA; FA_lure_temp];
-        end
-    end
-end
-%%% save the FA_lure_group.mat for subsequent LMM analysis
-% save([CLdata_folder, 'FA_lure_overall_YAOA_stats_', suffixWord, '.mat'], 'FA_lure_overall_YAOA');
 
 %% Data for Figure 2E: plotting the evidence for transition learning –– proportion of correct responses when the previous item/loc correct versus incorrect
 % added by XR @ Sep 14 2025
@@ -1768,205 +895,37 @@ end
 transAcc_flg = 0;
 if transAcc_flg == 0    % all responses per retrieval test
     transAcc_count_plot = transAcc_count_group;
-elseif transAcc_flg == 1 % first half
-    transAcc_count_plot = transAcc_count_firstHalf_group;
-elseif transAcc_flg == 2 % second half
-    transAcc_count_plot = transAcc_count_secondHalf_group;
 end
-transAcc_plot_group       = cell(2, nGroup); % 2: marginal and joint
-transAcc_plot_mjAvg_group = cell(1, nGroup); % average across marginal and joint
-transAcc_drop_mjAvg_group = cell(1, nGroup);
+transAcc_plot_group = cell(1, nGroup); % only partial retrieval
 for iGrp = 1 : nGroup % YA and OA
-    %% marginal and reconstruction report separately
-    for ij = 1 : 2 % marginal and reconstruction
-        transAcc_count_ij = transAcc_count_plot{ij, iGrp};
-        transAcc_plot = nan(size(transAcc_count_ij, 1), 4); % 4: 1-2, accuracy for item transition; 3-4, accuracy for location transition
+    transAcc_count_ij = transAcc_count_plot{1, iGrp};
+    % transAcc_count_marg_subj = nan(subLen, 4, 2, nSim); % 4: 4 different counts; 2: item and location
+
+    %% For the simulation, only the partial retrievals were simulated 
+    transAcc_plot = nan(size(transAcc_count_ij, 1), 4, nSim); % 4: 1-2, accuracy for item transition; 3-4, accuracy for location transition
+    for ij = 1 : nSim
         for iSubj = 1 : size(transAcc_count_ij, 1)
-            countLen_item_ii = squeeze(transAcc_count_ij(iSubj, :, 1));
-            countLen_loc_ii  = squeeze(transAcc_count_ij(iSubj, :, 2));
+            countLen_item_ii = squeeze(transAcc_count_ij(iSubj, :, 1, ij));
+            countLen_loc_ii  = squeeze(transAcc_count_ij(iSubj, :, 2, ij));
             % ------ Item ------
             if (countLen_item_ii(1) + countLen_item_ii(2)) ~= 0
-                transAcc_plot(iSubj, 1) = countLen_item_ii(1) / (countLen_item_ii(1) + countLen_item_ii(2));
+                transAcc_plot(iSubj, 1, ij) = countLen_item_ii(1) / (countLen_item_ii(1) + countLen_item_ii(2));
             end
             if (countLen_item_ii(3) + countLen_item_ii(4)) ~= 0
-                transAcc_plot(iSubj, 2) = countLen_item_ii(3) / (countLen_item_ii(3) + countLen_item_ii(4));
+                transAcc_plot(iSubj, 2, ij) = countLen_item_ii(3) / (countLen_item_ii(3) + countLen_item_ii(4));
             end
 
             % ------ Location ------
             if (countLen_loc_ii(1) + countLen_loc_ii(2)) ~= 0
-                transAcc_plot(iSubj, 3) = countLen_loc_ii(1) / (countLen_loc_ii(1) + countLen_loc_ii(2));
+                transAcc_plot(iSubj, 3, ij) = countLen_loc_ii(1) / (countLen_loc_ii(1) + countLen_loc_ii(2));
             end
             if (countLen_loc_ii(3) + countLen_loc_ii(4)) ~= 0
-                transAcc_plot(iSubj, 4) = countLen_loc_ii(3) / (countLen_loc_ii(3) + countLen_loc_ii(4));
+                transAcc_plot(iSubj, 4, ij) = countLen_loc_ii(3) / (countLen_loc_ii(3) + countLen_loc_ii(4));
             end
         end
-        transAcc_plot_group{ij, iGrp} = transAcc_plot;
     end
-
-    %% average across marginal and reconstruction report
-    transAcc_plot_iGrp_temp = nan(size(transAcc_plot_group{1, iGrp}, 1), 4, 2); % the last 2: marginal and reconstruction
-    transAcc_plot_iGrp_temp(:, :, 1) = transAcc_plot_group{1, iGrp};
-    transAcc_plot_iGrp_temp(:, :, 2) = transAcc_plot_group{2, iGrp};
-    
-    transAcc_plot_iGrp_temp_avg = nanmean(transAcc_plot_iGrp_temp, 3);
-    transAcc_plot_mjAvg_group{1, iGrp} = transAcc_plot_iGrp_temp_avg;
-    %%% ------ calculate the drop percentage for both YA and OA ------
-    transAcc_drop_mjAvg_group{1, iGrp} = [
-        (transAcc_plot_iGrp_temp_avg(:, 1) -  transAcc_plot_iGrp_temp_avg(:, 2)) ./ transAcc_plot_iGrp_temp_avg(:, 1), ...
-        (transAcc_plot_iGrp_temp_avg(:, 3) -  transAcc_plot_iGrp_temp_avg(:, 4)) ./ transAcc_plot_iGrp_temp_avg(:, 3)
-        ];
+    transAcc_plot_group{1, iGrp} = transAcc_plot;
 end
-%% save data for Figure 2E in the FlexibleBinding paper
-% save([CLdata_folder, 'transAcc_plot_YAOA_', suffixWord, '.mat'], 'transAcc_plot_group');
-% save([CLdata_folder, 'transAcc_plot_mjAvg_YAOA_', suffixWord, '.mat'], 'transAcc_plot_mjAvg_group');
-
-%% Figure 2E statistics
-%%% ------Reorganize the transAcc_plot_group.mat in order to run the statistical analysis------
-% ----transition evidence----
-% transAcc_plot_group       = cell(2, nGroup); % 2: marginal and joint
-% transAcc_plot = nan(size(transAcc_count_ij, 1), 4); % 4: 1-2, accuracy for item transition; 3-4, accuracy for location transition
-transAcc_overall_group = []; % ****** For Figure 2E and its SI ******
-for iGrp = 1 : nGroup % YA and OA
-    if iGrp == 1
-        disp('------YA------')
-    elseif iGrp == 2
-        disp('------OA------')
-    end
-    for ij = 1 : 2 % marginal and reconstruction
-        transAcc_ij = transAcc_plot_group{ij, iGrp};
-
-        %% ------ data for the LMM test ------
-        for iCp = 1 : 2 % item and location
-            iCp_idx = (iCp - 1) * 2 + 1 : iCp * 2;
-            transAcc_ij_iCp = transAcc_ij(:, iCp_idx);
-            subLen_tmp  = size(transAcc_ij_iCp, 1); % subLen
-            condsNs_tmp = size(transAcc_ij_iCp, 2); % 2 columns: correct vs. incorrect
-
-            %%% ----------Label age groups: 0-YA, 1-OA----------
-            groupType_col = repmat((iGrp - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label report types: 0-marginal report, 1-reconstruction report----------
-            reportType_col = repmat((ij - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Item or Location sequence or dimension----------
-            transReportType_col = repmat((iCp - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label participant index----------
-            subj_col = repmat((1 : 1 : subLen_tmp)' - 1, 1, condsNs_tmp);
-            subj_col = reshape(subj_col, [subLen_tmp * condsNs_tmp, 1]);
-            
-            %%% ----------Label each column and then concatenate the 2 columns into one column ----------
-            % 1: (item | item = R) or (loc | loc = R) [R: correct response; W: incorrect response]
-            % 0: (item | item = W) or (loc | loc = W) 
-            transConds = nan(subLen_tmp, condsNs_tmp);
-            transConds(:, 1) = ones(subLen_tmp, 1);
-            transConds(:, 2) = zeros(subLen_tmp, 1);
-            transConds_col = reshape(transConds, [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Transition accuracy----------
-            transAcc_ij_iCp_col = reshape(transAcc_ij_iCp, [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Concatenate the transition calculation across loops----------
-            transAcc_cal_temp = [];
-            transAcc_cal_temp = [groupType_col, subj_col, reportType_col, transReportType_col, transConds_col, transAcc_ij_iCp_col];
-            transAcc_overall_group = [transAcc_overall_group; transAcc_cal_temp];
-
-        end
-    end
-end
-%%% ------save the above data for subsequent statistical tests------
-% save([CLdata_folder, 'transAcc_overall_stats_YAOA_', suffixWord, '.mat'], 'transAcc_overall_group');
-
-%% Figure2G and Figure 2HI statistics
-% Original script in seqMemTask_v1_anal_summary.m (Lines 2301-2390)
-% added by rxj @ Dec 30 2024
-binds_overall_group      = []; % ****** For Figure 2G ****** 
-binds_overall_diff_group = []; % ****** For Figure 2H and 2I****** 
-for iGrp = 1 : nGroup % YA and OA
-    if iGrp == 1
-        disp('------YA------')
-    elseif iGrp == 2
-        disp('------OA------')
-    end
-    for ij = 1 : 2 % marginal and reconstruction
-        binds_conPctr_group_ij = binds_conPctr_group{ij, iGrp}(:, :, 1 : 2);
-        for iCp = 1 : 2 % (Con|Pos) and (Pos|Con)
-            %% ------ Data for Figure 2G ------
-            binds_Cp_subj = binds_conPctr_group_ij(:, :, iCp); % subLen * 4
-            subLen_tmp  = size(binds_Cp_subj, 1); % subLen
-            condsNs_tmp = size(binds_Cp_subj, 2); % 4 columns (or sub-conditions)
-
-            %%% ----------Label age groups: 0-YA, 1-OA----------
-            groupType_col = repmat((iGrp - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label report types: 0-marginal report, 1-reconstruction report----------
-            reportType_col = repmat((ij - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label binding directions: 0-(item | pos), 1-(pos | item)----------
-            bindsDirection_col = repmat((iCp - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label participant index----------
-            subj_col = repmat((1 : 1 : subLen_tmp)' - 1, 1, condsNs_tmp);
-            subj_col = reshape(subj_col, [subLen_tmp * condsNs_tmp, 1]);
-            
-            %%% ----------Label each column and then concatenate the 4 columns into one column ----------
-            % ------(item | pos)------
-            % 1: (item | item = R, pos = R), (item | item = W, pos = R) [R: correct response; W: incorrect response]
-            % 0: (item | item = R, pos = W), (item | item = W, pos = W)
-            % ------(pos | item)------
-            % 1: (pos | pos = R, item = R), (pos | pos = W, item = R)
-            % 0: (pos | pos = R, item = W), (pos | pos = W, item = W)
-            bindsCond = nan(subLen_tmp, condsNs_tmp);
-            bindsCond(:, [1, 3]) = ones(subLen_tmp, 2);
-            bindsCond(:, [2, 4]) = zeros(subLen_tmp, 2);
-            bindsCond_col = reshape(bindsCond, [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Binds calculations----------
-            binds_Cp_subj_col = reshape(binds_Cp_subj, [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Concatenate the binds calculation across loops----------
-            binds_cal_temp = [];
-            binds_cal_temp = [groupType_col, subj_col, reportType_col, bindsDirection_col, bindsCond_col, binds_Cp_subj_col];
-            binds_overall_group = [binds_overall_group; binds_cal_temp];
-
-            %% ------ Data for original Figure 2H and 2I ------
-            %%% ----------Calculate the differences----------
-            % !!!!!! make the cost and benefit the same direction !!!!!!
-            binds_Cp_subj_diff = [binds_Cp_subj(:, 1) - binds_Cp_subj(:, 2), binds_Cp_subj(:, 3) - binds_Cp_subj(:, 4)];
-            subLen_tmp  = size(binds_Cp_subj_diff, 1); % subLen
-            condsNs_tmp = size(binds_Cp_subj_diff, 2); % 2 columns: differences
-
-            %%% ----------Label age groups: 0-YA, 1-OA----------
-            groupType_col = repmat((iGrp - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label report types: 0-marginal report, 1-reconstruction report----------
-            reportType_col = repmat((ij - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label binding directions: 0-(item | pos), 1-(pos | item)----------
-            bindsDirection_col = repmat((iCp - 1), [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label participant index----------
-            subj_col = repmat((1 : 1 : subLen_tmp)' - 1, 1, condsNs_tmp);
-            subj_col = reshape(subj_col, [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Label the cost and benefit condition----------
-            bindsCond = [zeros(subLen_tmp, 1), ones(subLen_tmp, 1)];
-            bindsCond_col = reshape(bindsCond, [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Binds difference calculations----------
-            binds_Cp_subj_col = reshape(binds_Cp_subj_diff, [subLen_tmp * condsNs_tmp, 1]);
-
-            %%% ----------Concatenate the binds calculation across loops----------
-            binds_cal_diff_temp = [];
-            binds_cal_diff_temp = [groupType_col, subj_col, reportType_col, bindsDirection_col, bindsCond_col, binds_Cp_subj_col];
-            binds_overall_diff_group = [binds_overall_diff_group; binds_cal_diff_temp];
-
-        end
-    end
-end
-%%% ------save the above data for subsequent statistical tests------
-% save([CLdata_folder, 'bindsRaw_overall_stats_YAOA_', suffixWord, '.mat'], 'binds_overall_group');
-% save([CLdata_folder, 'binds_overall_diff_stats_YAOA_', suffixWord, '.mat'], 'binds_overall_diff_group');
 
 %% color settings
 colorSets = [0.98, 0.72, 0.69; ...
@@ -1997,291 +956,6 @@ colorGrp = [230, 85, 13; ...
             186, 228, 179] ./ 255; %% recons post-test: 3 groups
 
 %% ******* Part 1: YA vs. OA for each curriclum ******
-%% Figure 2C: Interleaved condition in Experiment 2
-%%% seqMemTask_v2_anal_early_late_window_Binding.m
-%%% ---------Figure 2C in the behavioral manuscript: Memory gradient only for the Interleaved condition---------
-nConds_comp = 2; % 1) three-retrieval trials; 2) only the trials in the first reporting window
-acc_group_comp = cell(2, nConds_comp);
-for iA = 1 : 2 % YA and OA group
-    if iA == 1
-        groupName = 'younger';
-    elseif iA == 2
-        groupName = 'older';
-    end
-    %%% ------Three-retrieval-trials------
-    acc_group_comp{iA, 1} = acc_group{iA}(:, [9,10,11]); % subLen * 3 reports
-    %%% ------Data from the 1st reporting window from the Interleaved condition------
-    acc_group_comp{iA, 2} = squeeze(acc_subj_orderUP_group{iA}(:, 1, :)); % subLen * 3 reports (content-first, position-first and recons-only)
-end
-
-%% plotting
-figKey = 1;
-if figKey == 0
-    barLineWid = 2;
-    errLineWid = 3;
-    refLineWid = 1;
-elseif figKey == 1
-    barLineWid = 1;
-    errLineWid = 2;
-    refLineWid = 0.5;
-end
-figure('Position', [100 100 300 150]), clf;
-barPos = [1, 1.5, 2;...  % YA
-          1.15, 1.65, 2.15; ...
-          3, 3.5, 4; ...
-          3.15, 3.65, 4.15]; % OA
-color_gray = [0, 0, 0; ...
-              82, 82, 82] ./ 255;
-LineStyle_conds = {'-', ':'};
-color_iGrp = 0.5 * colorGrp([1, 4, 7], :) + 0.5 * [1, 1, 1];
-
-p_recons_nGroup  = nan(1, 2);
-for iA = 1 : 2 % YA and OA group
-    if iA == 1
-        disp('==========YA==========')
-    elseif iA == 2
-        disp('==========OA==========')
-    end
-    barPos_iA = barPos((iA - 1) * 2 + 1 : iA * 2, :);
-    acc_avg_group = zeros(nConds_comp, 3);
-    for iConds = 1 : nConds_comp % % 1) three reports trials; 2) only the trials in the first reporting window
-        acc_iGrp = acc_group_comp{iA, iConds}(:, 1 : 3);
-        [acc_avg, acc_sem] = Mean_and_Se(acc_iGrp, 1);
-        acc_avg_group(iConds, :) = acc_avg;
-        if iConds == 1     % plot it as barplot
-            for iC = 1 : 3 % content, position and both-pre
-                barPos_i = barPos_iA(iConds, iC);
-                b = bar(barPos_i, acc_avg(iC), 0.45, 'LineStyle', '-', 'LineWidth', barLineWid); hold on;
-                b.FaceColor = color_iGrp(iC, :); %[1, 1, 1];
-                %b.EdgeColor = color_iGrp(iC, :);
-                errorbar(barPos_i, acc_avg(iC), acc_sem(iC), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-                plot(barPos_i, acc_avg(iC), 'Marker', '.', 'MarkerSize', 15, 'Color', 'k'); hold on;
-            end
-
-        elseif iConds == 2 % plot it as lineplot
-            for iC = 3 % only plot the both-pre; 1 : 3 % content, position and both-pre
-                errorbar(barPos_iA(iConds, iC), acc_avg(iC), acc_sem(iC), 'Color', color_gray(iConds, :), 'LineStyle', LineStyle_conds{iGrp}, 'LineWidth', errLineWid); hold on;
-                plot(barPos_iA(iConds, iC), acc_avg_group(iConds, iC), 'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', [1, 1, 1], 'MarkerEdgeColor', color_iGrp(iC, :), 'LineStyle', '-', 'LineWidth', 1); hold on;
-            end
-        end
-    end
-
-    % ------Reconstruction report from the 3-reports trials vs. recons-only
-    % trials------
-    disp('------Recons in the three-reports trials vs. recons-only trials------')
-    [h, p, ci, stats] = ttest(acc_group_comp{iA, 1}(:, 3), acc_group_comp{iA, 2}(:, 3), 'tail', 'both')
-    p_recons_nGroup(iA) = p;
-end
-
-disp('^^^^^^^^^^ Bonferroni-Holm corrected p: recons in the three-reports trials vs. recons-only trials- ^^^^^^^^^^ ')
-[cor_p, h] = bonf_holm(p_recons_nGroup, 0.05)
-
-xlim([0.7, 4.7]);
-ylim([0, 1]);
-if figKey == 0
-    % ------For presentation------
-    set(gca, 'LineWidth', 2);
-    set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', '', 'XTickLabel', '');
-    set(gca, 'YTick', [0.5, 1], 'YTickLabel', [0.5, 1]); 
-elseif figKey == 1
-    % ------For Adobe Illustrator------
-    set(gca, 'LineWidth', 0.8);
-    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', '', 'XTickLabel', '');
-    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', {'', '', ''});
-end
-box off;
-
-%% Supplementary figure (Figure S1A): learning curves 
-%%% ---------Replication of Figure 2A in Exp. 1. Block-wise learning curves---------
-color_Grp_curve = 0.5 * colorGrp([1, 4, 7], :) + 0.5 * [1, 1, 1];
-blockLines = [2.5, 4.5, 6.5, 8.5, 10.5, 12.5, 14.5, 16.5]; % using vertical line to label the block
-for iGrp = 1 : nGroup %% younger and older adults
-    acc_blc_iGrp = acc_blc_group{iGrp}(:, 1 : 2*8, :);
-    [acc_avg, acc_sem] = Mean_and_Se(acc_blc_iGrp, 1);
-    acc_avg = squeeze(acc_avg); % (nBlock)*2 * 3; % 3: (1) content report; (2) position report; (3) both report;
-    acc_sem = squeeze(acc_sem);
-    figure('Position', [100 100 300 150]), clf;
-    for iP = 1 : 3 % the first 3 rows: content, position and both
-        errorbar(1 : 1 : (nBlock*2), acc_avg(1 : 1 : (nBlock*2), iP), acc_sem(1 : 1 : (nBlock*2), iP), 'Color', color_Grp_curve(iP, :), 'LineStyle', '-', 'LineWidth', 1); hold on;
-        plot(1 : 1 : (nBlock*2), acc_avg(1 : 1 : (nBlock*2), iP), 'Marker', '.', 'MarkerSize', 15, 'Color', color_Grp_curve(iP, :), 'LineStyle', 'none'); hold on;
-    end
-    ylim([0, 1]);
-    xlim([0, ((nBlock)*2)+1]);
-    for iBlc = 1 : length(blockLines)
-        plot([blockLines(iBlc), blockLines(iBlc)], ylim, 'Color', [0.6, 0.6, 0.6], 'LineStyle', ':', 'LineWidth', 0.4); hold on;
-    end
-    %plot(xlim, [1/(nTrans+nDtr), 1/(nTrans+nDtr)], 'k--', 'LineWidth', 0.6); hold on;
-    set(gca, 'LineWidth', 0.8);
-    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', blockLines, 'XTickLabel', '');
-    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', '');
-    box off;
-    %%% statistical test
-    statMat = nan(nBlock*2, 2);
-    for iB = 1 : (nBlock*2)
-        [h, p, ci, stats] = ttest(acc_blc_iGrp(:, iB, 1), acc_blc_iGrp(:, iB, 2));
-        statMat(iB, :) = [p, stats.tstat];
-    end
-end
-
-%% Figure S1B, left panel: memory gradient across 3 retrievals based on all trials
-color_iGrp = 0.5 * colorGrp([1, 4, 7], :) + 0.5 * [1, 1, 1];
-acc_group_allTrials = cell(1, 2);
-for iA = 1 : 2 % YA and OA group
-    acc_group_allTrials{iA} = acc_group{iA}(:, [1,2,3]);
-end
-barPos = [1, 1.5, 2; % younger: content, position, reconstruction
-          3, 3.5, 4]; % older
-x_rand_group = cell(2, 3);
-for iA = 1 : 2 % YA and OA group
-    for iC = 1 : 3 % content, position and both-pre
-        barPos_i = barPos(iA, iC);
-        acc_iGrp = acc_group_allTrials{iA}(:, iC);
-        x_rand_group{iA, iC} = unifrnd(barPos_i - 0.1, barPos_i + 0.1, length(acc_iGrp), 1);
-    end
-end
-
-figKey = 1;
-if figKey == 0
-    barLineWid = 2;
-    errLineWid = 3;
-    refLineWid = 1;
-elseif figKey == 1
-    barLineWid = 1;
-    errLineWid = 2;
-    refLineWid = 0.5;
-end
-figure('Position', [100 100 300 150]), clf;
-for iGrp = 1 : nGroup 
-    %color_Grp = colorSets([iGrp, iGrp+2, iGrp+4], :);
-    for iC = 1 : 3 % content, position and both-pre
-        barPos_i = barPos(iGrp, iC);
-        acc_iGrp = acc_group_allTrials{iGrp}(:, iC);
-        [acc_avg, acc_sem] = Mean_and_Se(acc_iGrp, 1);
-        b = bar(barPos(iGrp, iC), acc_avg, 0.45, 'LineStyle', '-', 'LineWidth', barLineWid); hold on;
-        b.FaceColor = color_iGrp(iC, :);
-        x_rand = x_rand_group{iGrp, iC};
-        plot(x_rand, acc_iGrp, 'Marker', 'o', 'MarkerSize', 6, 'MarkerEdgeColor', [0, 0, 0], 'MarkerFaceColor', [0.9, 0.9, 0.9], 'LineStyle', 'none'); hold on;
-        errorbar(barPos(iGrp, iC), acc_avg, acc_sem, 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-    end
-end
-xlim([0.5, 4.5]);
-ylim([0, 1]);
-if figKey == 0
-    % ------For presentation------
-    set(gca, 'LineWidth', 2);
-    set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', '', 'XTickLabel', '');
-    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', 0 : 0.5 : 1); 
-elseif figKey == 1
-    % ------For Adobe Illustrator------
-    set(gca, 'LineWidth', 0.8);
-    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', '', 'XTickLabel', '');
-    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', {'', '', ''});
-end
-box off;
-
-
-%% Figure S1B, right panel: age-difference for each retrieval in Experiment 2 (replication of Figure 2B right panel)
-% two datasets: 1) all trials; 2) only three-retrieval trials
-% acc_change_comp = nan(size(acc_group_comp{2, 1}, 1), 3); % content, position and reconstruction
-% for iC = 1 : 3 % content, position and both-pre
-%     acc_change_comp(:, iC) = (acc_group_comp{2, 1}(:, iC) - nanmean(acc_group_comp{1, 1}(:, iC))) ./ nanmean(acc_group_comp{1, 1}(:, iC));
-% end
-acc_change_comp = nan(length(subjList_old), 3); % content, position and reconstruction
-for iC = 1 : 3 % content, position and both-pre
-    acc_change_comp(:, iC) = (acc_group_allTrials{2}(:, iC) - nanmean(acc_group_allTrials{1}(:, iC))) ./ nanmean(acc_group_allTrials{1}(:, iC));
-end
-
-color_iGrp = 0.5 * colorGrp([1, 4, 7], :) + 0.5 * [1, 1, 1];
-figKey = 1;
-if figKey == 0
-    errLineWid = 3;
-    refLineWid = 1;
-elseif figKey == 1
-    errLineWid = 2;
-    refLineWid = 0.5;
-end
-figure('Position', [100 100 80 150]), clf;
-[acc_avg, acc_sem] = Mean_and_Se(acc_change_comp, 1);
-for iC = 1 : 3 % content, position and both-pre
-    errorbar(iC, acc_avg(iC), acc_sem(iC), 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
-    plot(iC, acc_avg(iC), 'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', color_iGrp(iC, :), 'MarkerEdgeColor', [0, 0, 0], 'LineStyle', '-', 'LineWidth', refLineWid); hold on;
-end
-xlim([0.5, 3.5]);
-ylim([-0.6, 0]);
-if figKey == 0
-    % ------For presentation------
-    set(gca, 'LineWidth', 2);
-    set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', '', 'XTickLabel', '');
-    %set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', 0 : 0.5 : 1); 
-elseif figKey == 1
-    % ------For Adobe Illustrator------
-    set(gca, 'LineWidth', 0.8);
-    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', '', 'XTickLabel', '');
-    set(gca, 'YTick', -0.6 : 0.2 : 0, 'YTickLabel', {'', '', ''}); 
-end
-box off;
-
-%% ---------- Figure 2D in Experiment 2 (replication in Experiment 1); lure effect ----------
-figKey = 1;  % 0: figure for presentation; 1: figure for AI.
-if figKey == 0
-    barLineWid = 2;
-    errLineWid = 3;
-    refLineWid = 1;
-elseif figKey == 1
-    barLineWid = 1;
-    errLineWid = 1.5; %2;
-    refLineWid = 0.5;
-end
-barPos = [1, 1.7, 2.0, 2.7];
-figure('Position', [100 100 160 120]), clf;
-for iGrp = 1 : nGroup % YA and OA
-    FA_lure_iGrp = FA_lure_group{iGrp}; % subLen * 2(item/loc) * 2(partial/full)
-    FA_lure_iGrp = nanmean(FA_lure_iGrp, 3);
-    if iGrp == 1
-        disp('------YA------')
-    elseif iGrp == 2
-        disp('------OA------')
-    end
-    iDm_idx = (iGrp - 1) * 2 + 1 : iGrp * 2;
-    [tAcc_avg, tAcc_sem] = Mean_and_Se(FA_lure_iGrp, 1);
-    barPos_i = barPos(iDm_idx);
-    plot(barPos_i, FA_lure_iGrp, 'Color', [0.6, 0.6, 0.6], 'LineStyle', '-', 'LineWidth', 0.4); hold on;
-    plot(barPos_i, tAcc_avg, 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
- 
-    for iDm = 1 : 2 % item or location dimension
-        errorbar(barPos_i(iDm), tAcc_avg(iDm), tAcc_sem(iDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-        plot(barPos_i(iDm), tAcc_avg(iDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', [0, 0, 0], 'MarkerFaceColor', color_Grp(iDm, :), 'LineStyle', '-'); hold on;
-    end
-    % ------ Statistical tests ------
-    disp('======== FA: item vs. location ========');
-    [h, p, ci, stats] = ttest(FA_lure_iGrp(:, 1), FA_lure_iGrp(:, 2))
-end
-xlim([0.6, 3.1]);
-ylim([0, 1]);
-if figKey == 0
-    % ------For presentation------
-    plot(xlim, [1/5, 1/5], 'Color', [0, 0, 0], 'LineStyle', ':', 'LineWidth', 1); hold on;
-    set(gca, 'LineWidth', 2);
-    set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', '', 'XTickLabel', '');
-    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', 0 : 0.5 : 1);
-elseif figKey == 1
-    % ------For Adobe Illustrator------
-    %plot(xlim, [1/5, 1/5], 'Color', [0, 0, 0], 'LineStyle', ':', 'LineWidth', refLineWid); hold on;
-    set(gca, 'LineWidth', 0.6); % 0.8
-    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', '', 'XTickLabel', '');
-    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', {'', '', ''});
-end
-box off;
-
 %% ---------- Figure 2E in Experiment 2 (replication in Experiment 1); transition accurcy ----------
 figKey = 1;  % 0: figure for presentation; 1: figure for AI.
 if figKey == 0
@@ -2294,8 +968,9 @@ elseif figKey == 1
     refLineWid = 0.5;
 end
 barPos = [1, 1.7, 2.0, 2.7];
-condsWord = 'marginal+full';
+condsWord = 'partial (simulations)';
 for iGrp = 1 : nGroup % YA and OA
+    transAcc_iGrp_sims = transAcc_plot_group{1, iGrp}; % transAcc_plot = nan(size(transAcc_count_ij, 1), 4, nSim); 
     if iGrp == 1
         disp('------YA------')
     elseif iGrp == 2
@@ -2313,26 +988,27 @@ for iGrp = 1 : nGroup % YA and OA
             dimWords  = 'location';
         end
         iDm_idx = (iDm - 1) * 2 + 1 : iDm * 2;
-        transAcc_plot_ij     = transAcc_plot_mjAvg_group{1, iGrp}(:, iDm_idx); % subj * 4
-        [tAcc_avg, tAcc_sem] = Mean_and_Se(transAcc_plot_ij, 1);
+
+        % ------ average across participants for each simulation ------
+        transAcc_iGrp_sims_iDm = transAcc_iGrp_sims(:, iDm_idx, :); 
+        [simAvg, ~, sim_qL, sim_qU] = Mean_and_Se(squeeze(nanmean(transAcc_iGrp_sims_iDm, 1)), 2, 0.05);
+
         barPos_i = barPos(iDm_idx);
-        plot(barPos_i, transAcc_plot_ij, 'Color', [0.6, 0.6, 0.6], 'LineStyle', '-', 'LineWidth', 0.4); hold on;
-        plot(barPos_i, tAcc_avg, 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
+        plot(barPos_i, simAvg, 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
         for jDm = 1 : 2 % 2: previous report is correct or incorrect
             if jDm == 1
                 preWords = 'preCorrect';
             elseif jDm == 2
                 preWords = 'preIncorrect';
             end
-            errorbar(barPos_i(jDm), tAcc_avg(jDm), tAcc_sem(jDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-            plot(barPos_i(jDm), tAcc_avg(jDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', color_iEd(jDm, :), 'MarkerFaceColor', color_iCp(jDm, :), 'LineStyle', '-'); hold on;
+            errorbar(barPos_i(jDm), simAvg(jDm), simAvg(jDm)-sim_qL(jDm), sim_qU(jDm)-simAvg(jDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
+            plot(barPos_i(jDm), simAvg(jDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', color_iEd(jDm, :), 'MarkerFaceColor', color_iCp(jDm, :), 'LineStyle', '-'); hold on;
             % ------ Statistical tests ------
             disp(['======== ', condsWord, '-', dimWords, '-', preWords, '========']);
-            [h, p, ci, stats] = ttest(transAcc_plot_ij(:, jDm))
         end
         for jDm = 1 : 2 % 2: previous report is correct or incorrect
-            errorbar(barPos_i(jDm), tAcc_avg(jDm), tAcc_sem(jDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-            plot(barPos_i(jDm), tAcc_avg(jDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', color_iEd(jDm, :), 'MarkerFaceColor', color_iCp(jDm, :), 'LineStyle', '-'); hold on;
+            errorbar(barPos_i(jDm), simAvg(jDm), simAvg(jDm)-sim_qL(jDm), sim_qU(jDm)-simAvg(jDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
+            plot(barPos_i(jDm), simAvg(jDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', color_iEd(jDm, :), 'MarkerFaceColor', color_iCp(jDm, :), 'LineStyle', '-'); hold on;
         end
     end
     xlim([0.6, 3.1]);
@@ -2367,7 +1043,7 @@ elseif figKey == 1
     refLineWid = 0.5;
 end
 barPos = [1, 1.7];
-binds_dataAnal = binds_conPctr_group;
+binds_dataAnal = binds_conPctr_group; % binds_conPctr_marg_subj = nan(subLen, 4, 4, nSim); % the 2nd 2: (1-2) proportion: item on position and position on item; (3-4) detected response numbers
 binds_dataAnal_grandAvg = cell(1, nGroup);
 bindScore_grandAvg = cell(1, nGroup);
 for iGrp = 1 : nGroup
@@ -2378,32 +1054,27 @@ for iGrp = 1 : nGroup
     end
     %%% ------ Average across different dimension ------
     %%% ----Partial retrieval----
-    binds_dataAnal_partial = nanmean(binds_dataAnal{1, iGrp}(:, :, 1 : 2), 3); % subj * 4 * 2
-    binds_dataAnal_partial = [nanmean(binds_dataAnal_partial(:, [1, 3]), 2), nanmean(binds_dataAnal_partial(:, [2, 4]), 2)];
-    %%% ----Full retrieval----
-    binds_dataAnal_full = nanmean(binds_dataAnal{2, iGrp}(:, :, 1 : 2), 3);
-    binds_dataAnal_full = [nanmean(binds_dataAnal_full(:, [1, 3]), 2), nanmean(binds_dataAnal_full(:, [2, 4]), 2)];
-    %%% ----average across partial and full finally----
-    binds_dataAnal_Tmp = nan(size(binds_dataAnal_partial, 1), 2, 2);
-    binds_dataAnal_Tmp(:, :, 1) = binds_dataAnal_partial;
-    binds_dataAnal_Tmp(:, :, 2) = binds_dataAnal_full;
-    binds_dataAnal_grandAvg{1, iGrp} = nanmean(binds_dataAnal_Tmp, 3);
-    bindScore_grandAvg{1, iGrp} = binds_dataAnal_grandAvg{1, iGrp}(:, 1) - binds_dataAnal_grandAvg{1, iGrp}(:, 2);
+    binds_dataAnal_Tmp = nan(size(binds_dataAnal{1, iGrp}, 1), 2, nSim);
+    for iSim = 1 : nSim
+        binds_dataAnal_partial = nanmean(binds_dataAnal{1, iGrp}(:, :, 1 : 2, iSim), 3); % subj * 4 * 2
+        binds_dataAnal_partial = [nanmean(binds_dataAnal_partial(:, [1, 3]), 2), nanmean(binds_dataAnal_partial(:, [2, 4]), 2)];
+        binds_dataAnal_Tmp(:, :, iSim) = binds_dataAnal_partial;
+    end
+    binds_dataAnal_grandAvg{1, iGrp} = binds_dataAnal_Tmp;
 
     figure('Position', [100 100 80 120]), clf;
-    binds_grandAvg_iGrp = binds_dataAnal_grandAvg{1, iGrp};
-    [tAcc_avg, tAcc_sem] = Mean_and_Se(binds_grandAvg_iGrp, 1);
+    binds_grandAvg_iGrp = binds_dataAnal_Tmp;
+    [simAvg, ~, sim_qL, sim_qU] = Mean_and_Se(squeeze(nanmean(binds_grandAvg_iGrp, 1)), 2, 0.05);
     barPos_i = barPos;
-    plot(barPos_i, binds_grandAvg_iGrp, 'Color', [0.6, 0.6, 0.6], 'LineStyle', '-', 'LineWidth', 0.4); hold on;
-    plot(barPos_i, tAcc_avg, 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
+    plot(barPos_i, simAvg, 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
     for jDm = 1 : 2 % 2: previous report is correct or incorrect
         if jDm == 1
             colorFace_jDm = [0, 0, 0];
         elseif jDm == 2
             colorFace_jDm = [1, 1, 1];
         end
-        errorbar(barPos_i(jDm), tAcc_avg(jDm), tAcc_sem(jDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-        plot(barPos_i(jDm), tAcc_avg(jDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', [0, 0, 0], 'MarkerFaceColor', colorFace_jDm, 'LineStyle', '-'); hold on;
+        errorbar(barPos_i(jDm), simAvg(jDm), simAvg(jDm)-sim_qL(jDm), sim_qU(jDm)-simAvg(jDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
+        plot(barPos_i(jDm), simAvg(jDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', [0, 0, 0], 'MarkerFaceColor', colorFace_jDm, 'LineStyle', '-'); hold on;
     end
     xlim([0.6, 2.1]);
     ylim([0, 1]);
@@ -2423,616 +1094,3 @@ for iGrp = 1 : nGroup
     box off;
 
 end
-
-%% ------ Check the binding score ------
-for iGrp = 1 : nGroup % YA and OA
-    if iGrp == 1
-        disp('========== YA ==========');
-    elseif iGrp == 2
-        disp('========== OA ==========');
-    end
-    bindScore_grandAvg_iGrp = bindScore_grandAvg{1, iGrp};
-    [bindScore_avg, bindScore_sem] = Mean_and_Se(bindScore_grandAvg_iGrp)
-end
-
-%% The SI for Figure 2G (Figure S3): splitting trials into object-location and location-object retrieval orders
-% (1) object-location: examining the influence of location sequence on
-% object retrieval in the first retrieval window, and the influence of
-% object sequence on location retrieval in the second retrieval window
-% (2) location-object: reversed as object-location
-figKey = 1;  % 0: figure for presentation; 1: figure for AI.
-if figKey == 0
-    barLineWid = 2;
-    errLineWid = 3;
-    refLineWid = 1;
-elseif figKey == 1
-    barLineWid = 1;
-    errLineWid = 1.5; %2;
-    refLineWid = 0.5;
-end
-barPos = [1, 1.7; 2.0, 2.7];
-binds_dataAnal = binds_conPctr_group_order; % binds_conPctr_group_order = cell(2, nGroup); % 2: for partial retrieval, separating object-location and location-object trials
-
-for iGrp = 1 : nGroup
-    if iGrp == 1
-        disp('------YA------')
-    elseif iGrp == 2
-        disp('------OA------')
-    end
-    %%% ------ Average across different dimension ------
-    %%% ---- Don't average across the two directions: obj|loc and loc|obj ----
-    %%% ---- object-location retrieval ----
-    binds_dataAnal_IP = binds_dataAnal{1, iGrp}(:, :, 1 : 2); % subj * 4 * 2: 2-obj|loc and loc|obj
-    binds_dataAnal_IP = [squeeze(nanmean(binds_dataAnal_IP(:, [1, 3], :), 2)), squeeze(nanmean(binds_dataAnal_IP(:, [2, 4], :), 2))]; % 4 columns
-    % first two columns: correct vs. incorrect in obj|loc (loc not used)
-    % last two columns:  correct vs. incorrect in loc|obj
-
-    %%% ---- location-object retrieval ----
-    binds_dataAnal_PI = binds_dataAnal{2, iGrp}(:, :, 1 : 2); % subj * 4 * 2: 2-obj|loc and loc|obj
-    binds_dataAnal_PI = [squeeze(nanmean(binds_dataAnal_PI(:, [1, 3], :), 2)), squeeze(nanmean(binds_dataAnal_PI(:, [2, 4], :), 2))]; % 4 columns
-    % first two columns: correct vs. incorrect in obj|loc
-    % last two columns:  correct vs. incorrect in loc|obj (obj not used)
-
-    %%% ---- make object-location retrieval and location-object retrieval separate ----
-    binds_dataAnal_Tmp = nan(size(binds_dataAnal_IP, 1), 4, 2);
-    binds_dataAnal_Tmp(:, :, 1) = binds_dataAnal_IP; % object-location retrieval
-    binds_dataAnal_Tmp(:, :, 2) = binds_dataAnal_PI; % location-object retrieval
-
-    %%% ---- Figures for each age group (similar as Figure 2G): correct vs.
-    %%% incorrect for object-location retrievals and location-object
-    %%% retrievals ----
-
-    for ij = 1 : 2 % 1: object-location retrieval; 2: location-object retrieval
-        figure('Position', [100 100 160 120]), clf;
-        for jk = 1 : 2 % 1: obj|loc; 2: loc|obj
-            barPos_i = barPos(jk, :);
-
-            col_idx = (jk - 1) * 2 + 1 : jk * 2;
-            binds_dataAnal_ij    = binds_dataAnal_Tmp(:, col_idx, ij);
-            [tAcc_avg, tAcc_sem] = Mean_and_Se(binds_dataAnal_ij, 1);
-
-            plot(barPos_i, binds_dataAnal_ij, 'Color', [0.6, 0.6, 0.6], 'LineStyle', '-', 'LineWidth', 0.4); hold on;
-            plot(barPos_i, tAcc_avg, 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
-
-            for jDm = 1 : 2 % 2: previous report is correct or incorrect
-                if jDm == 1
-                    colorFace_jDm = [0, 0, 0];
-                elseif jDm == 2
-                    colorFace_jDm = [1, 1, 1];
-                end
-                errorbar(barPos_i(jDm), tAcc_avg(jDm), tAcc_sem(jDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-                plot(barPos_i(jDm), tAcc_avg(jDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', [0, 0, 0], 'MarkerFaceColor', colorFace_jDm, 'LineStyle', '-'); hold on;
-            end
-
-        end
-        xlim([0.6, 3.1]);
-        ylim([0, 1]);
-        if figKey == 0
-            % ------For presentation------
-            set(gca, 'LineWidth', 2);
-            set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
-            set(gca, 'XTick', '', 'XTickLabel', '');
-            set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', 0 : 0.5 : 1);
-        elseif figKey == 1
-            % ------For Adobe Illustrator------
-            set(gca, 'LineWidth', 0.6); % 0.8
-            set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-            set(gca, 'XTick', '', 'XTickLabel', '');
-            set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', {'', '', ''});
-        end
-        box off;
-    end
-end
-
-%% ---------- Figure 2H and 2I in Experiment 2 (replication in Experiment 1): simplying the effect for Partial retrieval vs. Full retrieval; Transition correct vs. incorrect ----------
-% (1) Figure 2H: partial vs. full in YA and OA
-% (2) Figure 2I: preceding report in the current dimension was correct vs.
-% incorrect
-figKey = 1;  % 0: figure for presentation; 1: figure for AI.
-if figKey == 0
-    barLineWid = 2;
-    errLineWid = 3;
-    refLineWid = 1;
-elseif figKey == 1
-    barLineWid = 1;
-    errLineWid = 1.5; %2;
-    refLineWid = 0.5;
-end
-binds_dataAnal = binds_conPctr_group;
-bindsScore_PartialFull    = cell(1, nGroup);
-bindsScore_PreceedingCorr = cell(1, nGroup);
-for iGrp = 1 : nGroup % YA and OA
-    %%% ------ Partial vs. Full ------
-    %%% (1) Partial
-    binds_dataAnal_partial = binds_dataAnal{1, iGrp}(:, :, 1 : 2);
-    binds_dataAnal_partial_diff = nan(size(binds_dataAnal_partial , 1), 2, 2); % 1st 2: cost and benefit; 2nd 2: item | pos and pos | item
-    binds_dataAnal_partial_diff(:, :, 1) = [binds_dataAnal_partial(:, 1, 1) - binds_dataAnal_partial(:, 2, 1), ...
-                                            binds_dataAnal_partial(:, 3, 1) - binds_dataAnal_partial(:, 4, 1)]; % item | pos
-    binds_dataAnal_partial_diff(:, :, 2) = [binds_dataAnal_partial(:, 1, 2) - binds_dataAnal_partial(:, 2, 2), ...
-                                            binds_dataAnal_partial(:, 3, 2) - binds_dataAnal_partial(:, 4, 2)]; % pos | item
-    binds_dataAnal_partial_diffAvg = nanmean(nanmean(binds_dataAnal_partial_diff, 3), 2);
-    %%% (2) Full
-    binds_dataAnal_full = binds_dataAnal{2, iGrp}(:, :, 1 : 2);
-    binds_dataAnal_full_diff = nan(size(binds_dataAnal_full , 1), 2, 2);
-    binds_dataAnal_full_diff(:, :, 1) = [binds_dataAnal_full(:, 1, 1) - binds_dataAnal_full(:, 2, 1), ...
-                                         binds_dataAnal_full(:, 3, 1) - binds_dataAnal_full(:, 4, 1)];
-    binds_dataAnal_full_diff(:, :, 2) = [binds_dataAnal_full(:, 1, 2) - binds_dataAnal_full(:, 2, 2), ...
-                                         binds_dataAnal_full(:, 3, 2) - binds_dataAnal_full(:, 4, 2)];
-    binds_dataAnal_full_diffAvg = nanmean(nanmean(binds_dataAnal_full_diff, 3), 2);
-    bindsScore_PartialFull{1, iGrp} = [binds_dataAnal_partial_diffAvg, binds_dataAnal_full_diffAvg];
-
-    %%% ------ Preceding report in the current dimension was correct vs.
-    %%% incorrect ------
-    binds_dataAnal_partial_CostBenefit = nanmean(binds_dataAnal_partial_diff, 3);
-    binds_dataAnal_full_CostBenefit    = nanmean(binds_dataAnal_full_diff, 3);
-    binds_dataAnal_CostBenefitAll = nan(size(binds_dataAnal_partial_CostBenefit, 1), 2, 2); % 1st 2: cost and benefit; 2nd 2: partial and full report
-    binds_dataAnal_CostBenefitAll(:, :, 1) = binds_dataAnal_partial_CostBenefit;
-    binds_dataAnal_CostBenefitAll(:, :, 2) = binds_dataAnal_full_CostBenefit;
-    binds_dataAnal_CostBenefitAvg = nanmean(binds_dataAnal_CostBenefitAll, 3);
-    bindsScore_PreceedingCorr{1, iGrp} = binds_dataAnal_CostBenefitAvg;
-end
-barPos = [1, 1.7];
-colorFace_jDm = [0, 0, 0];
-p_values_allConds = [];
-for iPlot = 1 : 2 % 1-partial vs. full; 2-preceeding correct (cost) vs. incorrect (benefit)
-    if iPlot == 1
-        dataPlot = bindsScore_PartialFull;
-    elseif iPlot == 2
-        dataPlot = bindsScore_PreceedingCorr;
-    end
-    for iGrp = 1 : nGroup % YA and OA
-        if iGrp == 1
-            disp('------YA------')
-        elseif iGrp == 2
-            disp('------OA------')
-        end
-        figure('Position', [100 100 80 120]), clf;
-        binds_grandAvg_iGrp = dataPlot{1, iGrp};
-        [tAcc_avg, tAcc_sem] = Mean_and_Se(binds_grandAvg_iGrp, 1);
-        barPos_i = barPos;
-        plot(barPos_i, binds_grandAvg_iGrp, 'Color', [0.6, 0.6, 0.6], 'LineStyle', '-', 'LineWidth', 0.4); hold on;
-        plot(barPos_i, tAcc_avg, 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
-        for jDm = 1 : 2 
-            errorbar(barPos_i(jDm), tAcc_avg(jDm), tAcc_sem(jDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-            plot(barPos_i(jDm), tAcc_avg(jDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', [0, 0, 0], 'MarkerFaceColor', colorFace_jDm, 'LineStyle', '-'); hold on;
-            % -------- Statistical tests --------
-            if jDm == 1
-                disp('------Partial or Correct------')
-            elseif jDm == 2
-                disp('------Full or Incorrect------')
-            end
-            data_jDm = binds_grandAvg_iGrp(:, jDm);
-            data_jDm(isnan(data_jDm)) = [];
-            [h, p, ci, stats] = ttest(data_jDm)
-            p_values_allConds = [p_values_allConds; p];
-        end
-        xlim([0.6, 2.1]);
-        ylim([-0.2, 1]);
-        if figKey == 0
-            % ------For presentation------
-            set(gca, 'LineWidth', 2);
-            set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
-            set(gca, 'XTick', '', 'XTickLabel', '');
-            set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', 0 : 0.5 : 1);
-        elseif figKey == 1
-            % ------For Adobe Illustrator------
-            set(gca, 'LineWidth', 0.6); % 0.8
-            set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-            set(gca, 'XTick', '', 'XTickLabel', '');
-            set(gca, 'YTick', [-0.2, 0 : 0.5 : 1], 'YTickLabel', {'', '', '', ''});
-        end
-        box off;
-    end
-end
-%%
-disp('^^^^^^^^^^ Bonferroni-Holm corrected p: only the Figure 2H ^^^^^^^^^^ ')
-[cor_p, h] = bonf_holm(p_values_allConds(5 : end), 0.05)
-
-%% ---- Location error proximity analysis: statistics and figures ----
-% Proximity = chosen slot is exactly 45° (1 step) from the true slot on the full 8-position circle.
-% All incorrect responses (lure slot 6 included, not separated) are classified uniformly.
-% Rates are proportions of all incorrect responses per subject.
-% proxChance = occupancy-adjusted empirical chance: fraction of available (not yet occupied)
-%   incorrect slots that are 45°-adjacent to the true slot, averaged across positions and trials.
-
-errTypeNames = {'younger', 'older'};
-
-% ---- Compute empirical chance reference (overall and per position) ----
-proxChance_all = [proxChance_group{1}; proxChance_group{2}];
-proxChance     = nanmean(proxChance_all);
-fprintf('Empirical chance proximity rate (occupancy-adjusted, mean across subjects): %.3f\n', proxChance)
-
-% Per-position chance: average across both groups
-proxChanceByPos_all = [proxChanceByPos_group{1}; proxChanceByPos_group{2}]; % (nSubAll x nTrans)
-proxChanceByPos     = nanmean(proxChanceByPos_all, 1); % 1 x nTrans
-
-% ---- Print summary ----
-disp('======== Location error proportions (proximity vs. non-proximity) ========')
-disp('         Proximity (mean±SEM)   Non-proximity (mean±SEM)')
-for iGrp = 1 : nGroup
-    dat = locErrType_group{iGrp};
-    fprintf('%-10s  %.3f±%.3f          %.3f±%.3f\n', errTypeNames{iGrp}, ...
-        nanmean(dat(:,1)), nanstd(dat(:,1))/sqrt(sum(~isnan(dat(:,1)))), ...
-        nanmean(dat(:,2)), nanstd(dat(:,2))/sqrt(sum(~isnan(dat(:,2)))));
-end
-
-% ---- Statistical tests ----
-% (1) Proximity error rate vs. empirical chance (one-sample t-test)
-disp('-------- t-test: proximity rate vs. empirical chance --------')
-for iGrp = 1 : nGroup
-    fprintf('%s\n', errTypeNames{iGrp})
-    prox_iGrp = locErrType_group{iGrp}(:, 1);
-    prox_iGrp(isnan(prox_iGrp)) = [];
-    [h, p, ci, stats] = ttest(prox_iGrp, proxChance)
-end
-% (2) Proximity error rate: YA vs. OA
-disp('-------- t-test: proximity rate YA vs. OA --------')
-[h, p_prox_age, ci, stats] = ttest2(locErrType_group{1}(:,1), locErrType_group{2}(:,1))
-
-% ---- Figure: proximity proportion per group (one bar per group) ----
-figKey = 1;
-errLineWid = (figKey == 0) * 3 + (figKey == 1) * 1.5;
-barPos_err = [1; 2.5];  % one bar position per group
-figure('Position', [100 100 180 180]), clf;
-for iGrp = 1 : nGroup
-    dat = locErrType_group{iGrp}(:, 1); % subLen × 1, proximity proportion only
-    dat_avg = nanmean(dat);
-    dat_sem = nanstd(dat) / sqrt(sum(~isnan(dat)));
-    bP = barPos_err(iGrp);
-    xRand_iGrp = unifrnd(bP - 0.2, bP + 0.2, length(dat), 1);
-    xRand_color = 0.4 * color_Grp(iGrp, :) + 0.6 * [1, 1, 1];
-    for iSub = 1 : length(dat)
-        plot(xRand_iGrp(iSub), dat(iSub), 'Marker', 'o', 'MarkerSize', 6, 'MarkerFaceColor', xRand_color, 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.6); hold on
-    end
-    errorbar(bP, dat_avg, dat_sem, 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-    plot(bP, dat_avg, 'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', color_Grp(iGrp, :), 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.8); hold on
-end
-% plot([0.4, 3.1], [proxChance, proxChance], 'k--', 'LineWidth', 0.6); hold on;
-xlim([0.4, 3.1]);
-ylim([0, 1]);
-if figKey == 1
-    set(gca, 'LineWidth', 0.8, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', barPos_err', 'XTickLabel', {'YA', 'OA'});
-    set(gca, 'YTick', 0 : 0.25 : 1, 'YTickLabel', {'0', '0.25', '0.5', '0.75', '1'});
-end
-%ylabel('Proximity error proportion');
-box off;
-
-% ---- Figure: proximity error rate by sequence position ----
-% Chance reference is per-position (occupancy-adjusted), shown as a dashed line.
-% figure('Position', [100 100 280 180]), clf;
-% for iGrp = 1 : nGroup
-%     proxByPos = squeeze(locErrByPos_group{iGrp}(:, :, 1)); % subLen × nTrans
-%     [pBP_avg, pBP_sem] = Mean_and_Se(proxByPos, 1);
-%     errorbar(1 : nTrans, pBP_avg, pBP_sem, 'Color', color_grp(iGrp,:), ...
-%              'LineStyle', '-', 'LineWidth', errLineWid); hold on;
-%     plot(1 : nTrans, pBP_avg, 'Marker', 'o', 'MarkerSize', 5, ...
-%          'MarkerFaceColor', color_grp(iGrp,:), 'MarkerEdgeColor', 'k', ...
-%          'LineStyle', 'none'); hold on;
-% end
-% plot(1 : nTrans, proxChanceByPos, 'k--', 'LineWidth', 0.6); hold on; % per-position chance
-% xlim([0.5, nTrans + 0.5]);
-% ylim([0, 1]);
-% if figKey == 1
-%     set(gca, 'LineWidth', 0.8, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-%     set(gca, 'XTick', 1 : nTrans, 'XTickLabel', 1 : nTrans);
-%     set(gca, 'YTick', 0 : 0.25 : 1, 'YTickLabel', {'0', '0.25', '0.5', '0.75', '1'});
-% end
-% xlabel('Sequence position'); ylabel('Proximity error proportion');
-% legend({'YA', 'OA'}, 'Location', 'northeast', 'FontSize', 8);
-% box off;
-
-%% ---- Content error proximity analysis: statistics and figures ----
-% Proximity = chosen image is among the top-conProxK most similar of ALL 5 other
-% displayed images (Wu-Palmer, WordNet). Proximal set is fixed per step (not shrinking).
-% conSimChance = occupancy-adjusted chance: # proximal still available / # total available,
-%   averaged across steps and trials. Can decrease at later steps if proximal images
-%   were already used up, unlike the inflated fixed-K-over-available approach.
-% By-position breakdown uses recall step index (1-5) among non-lure steps.
-
-errTypeNames = {'younger', 'older'};
-figKey       = 1;
-errLineWid   = (figKey == 0) * 3 + (figKey == 1) * 1.5;
-barPos_err   = [1; 2.5];
-
-% ---- Figure: semantic similarity heatmap ----
-imgLabels = {'car', 'castle', 'cat', 'cream', 'female', 'hat', 'key', 'sunflower'};
-nImg      = length(imgLabels);
-figure('Position', [100 100 340 300]), clf;
-imagesc(conSimMat);
-colormap(parula);
-caxis([0 1]);
-cb = colorbar;
-cb.Label.String = 'Wu-Palmer similarity';
-cb.FontSize     = 8;
-set(gca, 'XTick', 1 : nImg, 'XTickLabel', imgLabels, 'XTickLabelRotation', 40, ...
-         'YTick', 1 : nImg, 'YTickLabel', imgLabels, ...
-         'FontSize', 9, 'FontName', 'Arial', 'FontWeight', 'bold', ...
-         'LineWidth', 0.8, 'TickDir', 'out');
-axis square;
-% Annotate each cell with the similarity value.
-% Use white text where the cell is dark (sim > 0.65), black elsewhere.
-for r = 1 : nImg
-    for c = 1 : nImg
-        val    = conSimMat(r, c);
-        txtCol = (val > 0.65) * [1 1 1] + (val <= 0.65) * [0 0 0];
-        text(c, r, sprintf('%.2f', val), ...
-             'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-             'FontSize', 7, 'FontName', 'Arial', 'Color', txtCol);
-    end
-end
-title('Semantic similarity (Wu-Palmer)', 'FontSize', 10, 'FontName', 'Arial');
-box off;
-
-conSimChance_all = [conSimChance_group{1}; conSimChance_group{2}];
-conSimChance     = nanmean(conSimChance_all);
-fprintf('Empirical chance content-proximity rate (occupancy-adjusted, mean across subjects): %.3f\n', conSimChance)
-
-conSimChanceByPos_all = [conSimChanceByPos_group{1}; conSimChanceByPos_group{2}];
-conSimChanceByPos     = nanmean(conSimChanceByPos_all, 1);  % 1 × nTrans
-
-% ---- Print summary ----
-disp('======== Content error proportions (proximity vs. non-proximity) ========')
-disp('         Proximity (mean±SEM)   Non-proximity (mean±SEM)')
-for iGrp = 1 : nGroup
-    dat = conErrType_group{iGrp};
-    fprintf('%-10s  %.3f±%.3f          %.3f±%.3f\n', errTypeNames{iGrp}, ...
-        nanmean(dat(:,1)), nanstd(dat(:,1))/sqrt(sum(~isnan(dat(:,1)))), ...
-        nanmean(dat(:,2)), nanstd(dat(:,2))/sqrt(sum(~isnan(dat(:,2)))));
-end
-
-% ---- Statistical tests ----
-disp('-------- t-test: content proximity rate vs. empirical chance --------')
-for iGrp = 1 : nGroup
-    fprintf('%s\n', errTypeNames{iGrp})
-    prox_iGrp = conErrType_group{iGrp}(:, 1);
-    prox_iGrp(isnan(prox_iGrp)) = [];
-    [h, p, ci, stats] = ttest(prox_iGrp, conSimChance)
-end
-disp('-------- t-test: content proximity rate YA vs. OA --------')
-[h, p_con_prox_age, ci, stats] = ttest2(conErrType_group{1}(:,1), conErrType_group{2}(:,1))
-
-% ---- Figure: content proximity proportion per group ----
-figure('Position', [100 100 180 180]), clf;
-for iGrp = 1 : nGroup
-    dat = conErrType_group{iGrp}(:, 1);
-    dat_avg = nanmean(dat);
-    dat_sem = nanstd(dat) / sqrt(sum(~isnan(dat)));
-    bP = barPos_err(iGrp);
-    xRand_iGrp = unifrnd(bP - 0.2, bP + 0.2, length(dat), 1);
-    xRand_color = 0.4 * color_Grp(iGrp, :) + 0.6 * [1, 1, 1];
-    for iSub = 1 : length(dat)
-        plot(xRand_iGrp(iSub), dat(iSub), 'Marker', 'o', 'MarkerSize', 6, 'MarkerFaceColor', xRand_color, 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.6); hold on
-    end
-    errorbar(bP, dat_avg, dat_sem, 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
-    plot(bP, dat_avg, 'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', color_Grp(iGrp, :), 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.8); hold on
-
-end
-% plot([0.4, 3.1], [conSimChance, conSimChance], 'k--', 'LineWidth', 0.6); hold on;
-xlim([0.4, 3.1]);
-ylim([0, 1]);
-if figKey == 1
-    set(gca, 'LineWidth', 0.8, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', barPos_err', 'XTickLabel', {'YA', 'OA'});
-    set(gca, 'YTick', 0 : 0.25 : 1, 'YTickLabel', {'0', '0.25', '0.5', '0.75', '1'});
-end
-%ylabel('Content proximity error proportion');
-box off;
-
-% ---- Figure: content proximity error rate by recall step ----
-% figure('Position', [100 100 280 180]), clf;
-% for iGrp = 1 : nGroup
-%     conByPos = squeeze(conErrByPos_group{iGrp}(:, :, 1));  % subLen × nTrans
-%     [cBP_avg, cBP_sem] = Mean_and_Se(conByPos, 1);
-%     errorbar(1 : nTrans, cBP_avg, cBP_sem, 'Color', color_grp(iGrp,:), ...
-%              'LineStyle', '-', 'LineWidth', errLineWid); hold on;
-%     plot(1 : nTrans, cBP_avg, 'Marker', 'o', 'MarkerSize', 5, ...
-%          'MarkerFaceColor', color_grp(iGrp,:), 'MarkerEdgeColor', 'k', ...
-%          'LineStyle', 'none'); hold on;
-% end
-% plot(1 : nTrans, conSimChanceByPos, 'k--', 'LineWidth', 0.6); hold on;
-% xlim([0.5, nTrans + 0.5]);
-% ylim([0, 1]);
-% if figKey == 1
-%     set(gca, 'LineWidth', 0.8, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-%     set(gca, 'XTick', 1 : nTrans, 'XTickLabel', 1 : nTrans);
-%     set(gca, 'YTick', 0 : 0.25 : 1, 'YTickLabel', {'0', '0.25', '0.5', '0.75', '1'});
-% end
-% xlabel('Recall step'); ylabel('Content proximity error proportion');
-% legend({'YA', 'OA'}, 'Location', 'northeast', 'FontSize', 8);
-% box off;
-
-%% ****** Part 2: different curricula together ******
-%% --------Overall accuracy: superpose the different curricula within a age group--------
-% and plot the YA and OA together
-% expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
-acc_group_comp = cell(nGroup, nCond);
-for iCond = 1 : nCond     % 3 curricula
-    suffixWord = expList{iCond};
-    load([CLdata_folder, 'acc_group_YAOA_', suffixWord, '.mat'], 'acc_group');
-    for iGrp = 1 : nGroup % YA and OA
-        acc_group_comp{iGrp, iCond} = acc_group{iGrp}(:, [1,2,3]);
-    end
-end
-
-figKey = 1;
-if figKey == 0
-    barLineWid = 2;
-    errLineWid = 3;
-    refLineWid = 1;
-elseif figKey == 1
-    barLineWid = 1;
-    errLineWid = 1.2; % 2
-    refLineWid = 0.5;
-end
-figure('Position', [100 100 300 150]), clf;
-barPos = [1, 1.5, 2;...  % YA
-          1.1, 1.6, 2.1; ...
-          1.2, 1.7, 2.2; ...
-          3, 3.5, 4; ...
-          3.1, 3.6, 4.1; ...
-          3.2, 3.7, 4.2]; % OA
-
-LineStyle_conds = {':', '-.', '-'};
-markStyle_conds = {'o', 'square', '^'};
-for iGrp = 1 : nGroup % YA and OA group
-    barPos_iGrp  = barPos((iGrp - 1) * nCond + 1 : iGrp * nCond, :);
-    acc_avg_Cond = zeros(nCond, 3); % 3: object/location/full retrieval
-    for iCond = 1 : nCond % interleaved, contentBlocked, & positionBlocked
-        acc_iGrp = acc_group_comp{iGrp, iCond}(:, 1 : 3);
-        [acc_avg, acc_sem] = Mean_and_Se(acc_iGrp, 1);
-        errorbar(barPos_iGrp(iCond, :), acc_avg, acc_sem, 'Color', [0, 0, 0], 'LineStyle', LineStyle_conds{iCond}, 'LineWidth', errLineWid); hold on;
-        acc_avg_Cond(iCond, :) = acc_avg;
-    end
-    for iCond = 1 : nCond % interleaved, contentBlocked, & positionBlocked
-        if iCond == 1
-            color_iGrp = colorGrp([1, 4, 7], :);
-            markSize = 8.5;
-        elseif iCond == 2
-            color_iGrp = colorGrp([2, 5, 8], :);
-            markSize = 9;
-        elseif iCond == 3
-            color_iGrp = colorGrp([3, 6, 9], :);
-            markSize = 9;
-        end
-        for iC = 1 : 3 % content, position and both-pre
-            plot(barPos_iGrp(iCond, iC), acc_avg_Cond(iCond, iC), 'Marker', markStyle_conds{iCond}, 'MarkerSize', markSize, 'MarkerFaceColor', color_iGrp(iC, :), 'MarkerEdgeColor', [0, 0, 0], 'LineStyle', '-', 'LineWidth', refLineWid); hold on;
-        end
-    end
-end
-xlim([0.7, 4.5]);
-ylim([0.4, 1]);
-if figKey == 0
-    % ------For presentation------
-    set(gca, 'LineWidth', 2);
-    set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', [1.1, 1.6, 2.1, 3.1, 3.6, 4.1], 'XTickLabel', '');
-    set(gca, 'YTick', [0.5, 1], 'YTickLabel', [0.5, 1]);
-elseif figKey == 1
-    % ------For Adobe Illustrator------
-    set(gca, 'LineWidth', 0.8);
-    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-    set(gca, 'XTick', [1.1, 1.6, 2.1, 3.1, 3.6, 4.1], 'XTickLabel', '');
-    set(gca, 'YTick', [0.4, 0.5, 1], 'YTickLabel', {'', '', ''});
-end
-box off;
-
-%% --------Figure 3C: accuracy for content, position and reconstruction for two displaying orders: 4th version (for presentation)--------
-% load the relevant data
-% expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
-acc_subj_orderUP_YAOA = cell(nGroup, nCond);
-acc_subj_post_YAOA    = cell(nGroup, nCond);
-for iCond = 1 : nCond
-    suffixWord = expList{iCond};
-    % ------ accuracy in different retrieval window ------
-    load([CLdata_folder, 'acc_subj_orderUP_YAOA_', suffixWord, '.mat'], 'acc_subj_orderUP_group');
-    for iGrp = 1 : nGroup % YA and OA
-        acc_subj_orderUP_YAOA{iGrp, iCond} = acc_subj_orderUP_group{iGrp};
-    end
-    % ------ accuracy in the post-test ------
-    load([CLdata_folder, 'acc_group_post_YAOA_', suffixWord, '.mat'], 'acc_group_post');
-    acc_subj_post_YAOA(:, iCond) = acc_group_post';
-
-end
-
-barPos    = cell(1, 4);
-barPos{1} = [0.5, 1, 1.5; ...
-             0.6, 1.1, 1.6; ...
-             0.7, 1.2, 1.7];
-barPos{2} = [2.0, 2.5; ...
-             2.1, 2.6; ...
-             2.2, 2.7];
-barPos{3} = [3.0; 3.1; 3.2];
-barPos{4} = [3.5; 3.6; 3.7];
-
-figKey = 1;
-if figKey == 0
-    barLineWid = 2;
-    errLineWid = 3;
-    refLineWid = 1;
-elseif figKey == 1
-    barLineWid = 1;
-    errLineWid = 1.2; % 2
-    refLineWid = 0.5;
-end
-
-% 4-subplots for each figure (or each age group):
-% (1) reports in the first order: content, position and recons-only in 3
-% conditions (interleaved, contentBlocked, positionBlocked)
-% (2) reports in the second order: position, content in 3 conditions
-% (3) reports in the third order: recons-only
-% (4) post-test
-LineStyle_conds = {':', '-.', '-'};
-markStyle_conds = {'o', 'square', '^'};
-color_gray = [0, 0, 0; ...
-              82, 82, 82; ...
-              115, 115, 115] ./ 255;
-for iGrp = 1 : nGroup % YA and OA 
-    figure('Position', [100 100 400 150]), clf;
-
-    for iOrd = 1 : length(barPos) % 4 reporting windows
-        acc_avg_group = zeros(nCond, size(barPos{iOrd}, 2));
-        for iCond = 1 : nCond % interleaved, contentBlocked, & positionBlocked
-            if iOrd  == 1
-                acc_ord_iGrp = squeeze(acc_subj_orderUP_YAOA{iGrp, iCond}(:, 1, :)); % subLen * 3 reports (content-first, position-first and recons-only)
-            elseif iOrd == 2
-                acc_ord_iGrp = squeeze(acc_subj_orderUP_YAOA{iGrp, iCond}(:, 2, 1 : 2)); % subLen * 2 (content-second, position-second)
-            elseif iOrd == 3
-                acc_ord_iGrp = squeeze(acc_subj_orderUP_YAOA{iGrp, iCond}(:, 3, 3)); % subLen * 1 (recons report in the non recons-only trials)
-            elseif iOrd == 4
-                acc_ord_iGrp = acc_subj_post_YAOA{iGrp, iCond};
-            end
-            [acc_avg, acc_sem] = Mean_and_Se(acc_ord_iGrp, 1);
-            errorbar(barPos{iOrd}(iCond, 1 : size(acc_ord_iGrp, 2)), acc_avg, acc_sem, 'Color', [0, 0, 0], 'LineStyle', LineStyle_conds{iCond}, 'LineWidth', errLineWid); hold on;
-            acc_avg_group(iCond, :) = acc_avg;
-        end
-        for iCond = 1 : nCond
-            if iOrd  == 1
-                color_Grp = colorGrp([iCond, iCond+3, iCond+6], :);
-                acc_ord_iGrp = squeeze(acc_subj_orderUP_YAOA{iGrp, iCond}(:, 1, :));% subLen * 3 reports (content-first, position-first and recons-only)
-            elseif iOrd == 2
-                color_Grp = colorGrp([iCond, iCond+3, iCond+6], :);
-                acc_ord_iGrp = squeeze(acc_subj_orderUP_YAOA{iGrp, iCond}(:, 2, 1 : 2)); % subLen * 2 (content-second, position-second)
-            elseif iOrd == 3
-                color_Grp = colorGrp([iCond, iCond+3, iCond+6], :);
-                color_Grp = color_Grp(3, :);
-                acc_ord_iGrp = squeeze(acc_subj_orderUP_YAOA{iGrp, iCond}(:, 3, 3)); % subLen * 1 (recons report in the non recons-only trials)
-            elseif iOrd == 4
-                color_Grp = colorGrp(iCond + 6, :);
-                acc_ord_iGrp = acc_subj_post_YAOA{iGrp, iCond};
-            end
-            if iGrp == 1
-                markSize = 8.5;
-            elseif iGrp == 2
-                markSize = 9;
-            elseif iGrp == 3
-                markSize = 9;
-            end
-            for i = 1 : size(acc_ord_iGrp, 2)
-                plot(barPos{iOrd}(iCond, i), acc_avg_group(iCond, i), 'Marker', markStyle_conds{iCond}, 'MarkerSize', markSize, 'MarkerFaceColor', color_Grp(i, :), 'MarkerEdgeColor', [0, 0, 0], 'LineStyle', 'none'); hold on;
-            end
-        end
-    end
-    xlim([0.2, 4.0]);
-    ylim([0.3, 1]);
-    plot([1.85, 1.85], ylim, 'Color', [0.4, 0.4, 0.4], 'LineStyle', '-', 'LineWidth', 0.3); hold on;
-    plot([2.85, 2.85], ylim, 'Color', [0.4, 0.4, 0.4], 'LineStyle', '-', 'LineWidth', 0.3); hold on;
-    plot([3.35, 3.35], ylim, 'Color', [0.4, 0.4, 0.4], 'LineStyle', '-', 'LineWidth', 0.3); hold on;
-    if figKey == 0
-        % ------For presentation------
-        set(gca, 'LineWidth', 2);
-        set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
-        set(gca, 'XTick', [0.6, 1.1, 1.6, 2.1, 2.6, 3.1, 3.6], 'XTickLabel', '');
-        set(gca, 'YTick', [0.5, 1], 'YTickLabel', [0.5, 1]);
-
-    elseif figKey == 1
-        % ------For Adobe Illustrator------
-        set(gca, 'LineWidth', 0.8);
-        set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-        set(gca, 'XTick', [0.6, 1.1, 1.6, 2.1, 2.6, 3.1, 3.6], 'XTickLabel', '');
-        set(gca, 'YTick', [0.3, 0.5, 1], 'YTickLabel', {'', '', ''});
-    end
-    box off;
-end
-
-
