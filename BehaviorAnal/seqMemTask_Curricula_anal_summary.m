@@ -46,7 +46,7 @@ yCir   = RChunk * sin(angCir) + centerY;
 
 expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
 nCond   = length(expList);
-expId   = expList{3};
+expId   = expList{1};
 if isequal(expId, 'interleaved')
     subjList_young = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
                       '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
@@ -197,10 +197,17 @@ choice_within_between_trials_group = [];
 % ------Location error proximity analysis------
 % 2 error types: [proximity, non-proximity] as proportions of all incorrect responses
 % Proximity = chosen slot is 45° (1 step) from true slot on the full 8-position circle.
+% Error classification now excludes steps where the true slot was already occupied by a
+% prior response (forced errors with no correct option available).
 locErrType_group       = cell(1, nGroup);
 locErrByPos_group      = cell(1, nGroup);
-proxChance_group       = cell(1, nGroup); % empirical chance proximity rate per subject (overall)
-proxChanceByPos_group  = cell(1, nGroup); % per sequence-position chance rate per subject
+% Two chance variants (both use the pre-response pool):
+%   proxChance_group     = "inconsistent" — chance over ALL non-lure steps
+%   proxChance_free_group = "consistent"  — chance only when true slot is still free
+proxChance_group            = cell(1, nGroup);
+proxChanceByPos_group       = cell(1, nGroup);
+proxChance_free_group       = cell(1, nGroup);
+proxChanceByPos_free_group  = cell(1, nGroup);
 
 % ------Content error proximity analysis------
 % Proximity = chosen image is among the top-conProxK most similar images to the
@@ -209,16 +216,20 @@ proxChanceByPos_group  = cell(1, nGroup); % per sequence-position chance rate pe
 % artifactual rise in proximity rate at later recall steps.
 % Chance at each step = (# proximal images still available) / (# total available).
 % Similarity: Wu-Palmer (WordNet). Image order: car=1 female=2 hat=3 sunflower=4 castle=5 cat=6 key=7 cream=8.
-conErrType_group        = cell(1, nGroup); % collapse transitions
-conErrByPos_group       = cell(1, nGroup); % separate transitions 
-conSimChance_group      = cell(1, nGroup);
-conSimChanceByPos_group = cell(1, nGroup);
+% Error classification excludes steps where the true display position was already occupied.
+conErrType_group         = cell(1, nGroup); % collapse transitions
+conErrByPos_group        = cell(1, nGroup); % separate transitions
+conSimChance_group       = cell(1, nGroup);
+conSimChanceByPos_group  = cell(1, nGroup);
+conSimChance_free_group      = cell(1, nGroup);
+conSimChanceByPos_free_group = cell(1, nGroup);
 
 imgNameList = {'car', 'castle', 'cat', 'cream', 'female', 'hat', 'key', 'sunflower'};
 
 similaritySource_list = {'CLIP', 'DINOv2', 'WordNet'};
 similarityId          = 1;
 similaritySource      = similaritySource_list{similarityId};
+imgIdxMap   = containers.Map(imgNameList, 1 : 8);
 if isequal(similaritySource, 'CLIP')
     confMat_dir = [CLscript_folder, similaritySource, '_results/'];
     confMat     = load([confMat_dir, similaritySource, '_visual_similarity.mat']);
@@ -230,7 +241,6 @@ elseif isequal(similaritySource, 'DINOv2')
     conSimMat   = confMat.visSimMat;
 
 elseif isequal(similaritySource, 'WordNet')
-    imgIdxMap   = containers.Map(imgNameList, 1 : 8);
     conSimMat   = [
                     %   car     castle  cat     cream   female  hat     key     sunflower
                     1.0000  0.5000  0.3200  0.6316  0.4211  0.5000  0.6316  0.3478;  % car
@@ -245,6 +255,7 @@ elseif isequal(similaritySource, 'WordNet')
 end
 conProxK = 2; % number of most-similar alternatives that count as "proximal"
 
+%% loop over groups and participants
 suffixWord = expId;
 for iGrp = 1 : nGroup %% younger and older adults
     if iGrp == 1
@@ -312,25 +323,29 @@ for iGrp = 1 : nGroup %% younger and older adults
 
     % ------Location error proximity analysis per subject------
     % Proximity = chosen slot is 45° away from the true slot on the full 8-position circle.
-    % All incorrect responses (including lure slot 6) are classified uniformly.
+    % Error classification excludes steps where the true slot was already occupied (forced errors).
     % locErrType_subj(:,1) = proximity error rate  (chosen slot is 45° / 1-step from true)
     % locErrType_subj(:,2) = non-proximity error rate (chosen slot is ≥90° / ≥2-steps from true)
     locErrType_subj  = nan(subLen, 2);
-    locErrByPos_subj = nan(subLen, nTrans, 2); % same broken down by sequence position 1-5
-    % proxChance_subj: empirical chance proximity rate (occupancy-adjusted):
-    % fraction of available-incorrect slots that are 45°-adjacent, averaged across all
-    % response positions and trials (earlier-occupied slots excluded from the pool).
-    proxChance_subj       = nan(subLen, 1);
-    proxChanceByPos_subj  = nan(subLen, nTrans); % same rate broken down by sequence position
+    locErrByPos_subj = nan(subLen, nTrans, 2);
+    % proxChance_subj     : chance over ALL non-lure steps (inconsistent reference)
+    % proxChance_free_subj: chance only when true slot is not yet occupied (consistent reference)
+    proxChance_subj            = nan(subLen, 1);
+    proxChanceByPos_subj       = nan(subLen, nTrans);
+    proxChance_free_subj       = nan(subLen, 1);
+    proxChanceByPos_free_subj  = nan(subLen, nTrans);
 
     % ------Content error proximity analysis per subject------
     % conErrType_subj(:,1) = proximal error rate  (chosen image in top-conProxK similar available)
     % conErrType_subj(:,2) = non-proximal error rate
-    % By-position breakdown uses recall step index (1-5, lure step excluded).
-    conErrType_subj        = nan(subLen, 2);
-    conErrByPos_subj       = nan(subLen, nTrans, 2);
-    conSimChance_subj      = nan(subLen, 1);
-    conSimChanceByPos_subj = nan(subLen, nTrans);
+    % Error classification excludes steps where the true display position was already occupied.
+    conErrType_subj              = nan(subLen, 2);
+    conErrByPos_subj             = nan(subLen, nTrans, 2);
+    conSimChance_subj            = nan(subLen, 1);
+    conSimChanceByPos_subj       = nan(subLen, nTrans);
+    conSimChance_free_subj       = nan(subLen, 1);
+    conSimChanceByPos_free_subj  = nan(subLen, nTrans);
+
     %%
     for iSub = 1 : subLen
         subjBv = subj_list{iSub, 1};
@@ -562,11 +577,17 @@ for iGrp = 1 : nGroup %% younger and older adults
         % (j=1 first), earlier-occupied slots are excluded from the available pool.
         locErrCnt          = zeros(1, 2);      % [proximity, non-proximity] raw counts
         locErrByPos        = zeros(nTrans, 2); % same broken down by sequence position (1-5)
-        proxChanCnt        = 0;                % overall adjacent-available-slot count
-        proxChanTotal      = 0;                % overall denominator
-        proxChanCntByPos   = zeros(nTrans, 1); % per-position adjacent count
-        proxChanTotalByPos = zeros(nTrans, 1); % per-position denominator
-        proxThresh         = 3 * pi / 8;       % 67.5°: midpoint between 45° and 90°
+        % Inconsistent chance: all non-lure steps
+        proxChanCnt        = 0;
+        proxChanTotal      = 0;
+        proxChanCntByPos   = zeros(nTrans, 1);
+        proxChanTotalByPos = zeros(nTrans, 1);
+        % Consistent chance: only steps where true slot is still free
+        proxChanCnt_free        = 0;
+        proxChanTotal_free      = 0;
+        proxChanCntByPos_free   = zeros(nTrans, 1);
+        proxChanTotalByPos_free = zeros(nTrans, 1);
+        proxThresh = 3 * pi / 8;       % 67.5°: midpoint between 45° and 90°
 
         for i = 1 : nEpi
             if reconsOnly(i) == 0
@@ -580,31 +601,51 @@ for iGrp = 1 : nGroup %% younger and older adults
                     trueSlot = locTrue_i(j);
                     repSlot  = locRep_i(j);
 
-                    if trueSlot == 6, continue; end  % distractor image: no proximity analysis
+                    if trueSlot == 6
+                        if repSlot ~= 0
+                            occupiedSlots = [occupiedSlots, repSlot];
+                        end
+                        continue;
+                    end
                     seqPos     = trueSlot;
                     theta_true = atan2(pY(trueSlot), pX(trueSlot));
 
-                    % Empirical chance: fraction of available incorrect slots that are adjacent
+                    trueSlotFree = ~ismember(trueSlot, occupiedSlots);
+
+                    % Chance (pre-response pool): accumulated for ALL non-lure steps
+                    % and separately for steps where the true slot is still free.
                     availSlots = setdiff(1:(nTrans+nDtr), [trueSlot, occupiedSlots]);
                     for kk = availSlots
                         arc_kk = mod(atan2(pY(kk), pX(kk)) - theta_true, 2*pi);
                         arc_kk = min(arc_kk, 2*pi - arc_kk);   % shortest arc, 0..pi
                         isAdj  = arc_kk < proxThresh;
-                        proxChanCnt               = proxChanCnt               + isAdj;
-                        proxChanTotal             = proxChanTotal             + 1;
-                        proxChanCntByPos(seqPos)  = proxChanCntByPos(seqPos)  + isAdj;
+                        proxChanCnt                = proxChanCnt               + isAdj;
+                        proxChanTotal              = proxChanTotal             + 1;
+                        proxChanCntByPos(seqPos)   = proxChanCntByPos(seqPos)  + isAdj;
                         proxChanTotalByPos(seqPos) = proxChanTotalByPos(seqPos) + 1;
+                        if trueSlotFree
+                            proxChanCnt_free                = proxChanCnt_free               + isAdj;
+                            proxChanTotal_free              = proxChanTotal_free             + 1;
+                            proxChanCntByPos_free(seqPos)   = proxChanCntByPos_free(seqPos)  + isAdj;
+                            proxChanTotalByPos_free(seqPos) = proxChanTotalByPos_free(seqPos) + 1;
+                        end
                     end
 
-                    % Mark response slot as occupied before moving to next position
+                    % Update occupancy after chance computation
                     if repSlot ~= 0
                         occupiedSlots = [occupiedSlots, repSlot];
                     end
 
-                    % Classify error
+                    % Skip error classification if true slot was already taken (forced error)
+                    if ~trueSlotFree,   continue; end
+
+                    % Classify error (conditioned on incorrect response)
+                    % (if no response or correct response, then skip the following part)
                     if repSlot == 0,        continue; end
                     if repSlot == trueSlot, continue; end
 
+                    % ------ Only when participants responded incorrectly,
+                    % the classification below happens ------
                     arc_rep = mod(atan2(pY(repSlot), pX(repSlot)) - theta_true, 2*pi);
                     arc_rep = min(arc_rep, 2*pi - arc_rep);   % shortest arc, 0..pi
                     isProx  = arc_rep < proxThresh;
@@ -638,8 +679,21 @@ for iGrp = 1 : nGroup %% younger and older adults
                 proxChanceByPos_subj(iSub, iP) = proxChanCntByPos(iP) / proxChanTotalByPos(iP);
             end
         end
+        if proxChanTotal_free > 0
+            proxChance_free_subj(iSub) = proxChanCnt_free / proxChanTotal_free;
+        end
+        for iP = 1 : nTrans
+            if proxChanTotalByPos_free(iP) > 0
+                proxChanceByPos_free_subj(iSub, iP) = proxChanCntByPos_free(iP) / proxChanTotalByPos_free(iP);
+            end
+        end
 
         %% ---- Content error proximity analysis ----
+        % additional notes added by XR @ July 21 2026
+        % Only for the incorrect responses: whether participants have a
+        % larger probability to choose the image that is more similar to
+        % the correct response
+        % ===========================================================================
         % Proximity: chosen image is among the top-conProxK most similar images to
         % the true image, ranked across ALL 5 other displayed images (not just those
         % still available). The proximal set is fixed once per step so it does not
@@ -653,18 +707,24 @@ for iGrp = 1 : nGroup %% younger and older adults
         % By-position breakdown uses the recall step counter (1-5) among non-lure steps.
         conErrCnt            = zeros(1, 2);
         conErrByPos_i        = zeros(nTrans, 2);
+        % Inconsistent chance: all non-lure steps
         conSimChanCnt        = 0;
         conSimChanTotal      = 0;
         conSimChanCntByPos   = zeros(nTrans, 1);
         conSimChanTotalByPos = zeros(nTrans, 1);
+        % Consistent chance: only steps where true position is still free
+        conSimChanCnt_free        = 0;
+        conSimChanTotal_free      = 0;
+        conSimChanCntByPos_free   = zeros(nTrans, 1);
+        conSimChanTotalByPos_free = zeros(nTrans, 1);
 
         for i = 1 : nEpi
             if reconsOnly(i) == 0
                 imgIds    = conSeqTrl_col{i};   % 1×6: image ID at each display position
-                conTrue_i = conTrue_col{i};     % 1×6: true display pos at each step
-                conRep_i  = conRep_col{i};      % 1×6: reported display pos at each step
-                occupiedPos = [];
-                seqStep     = 0;                % counts non-lure steps (1..nTrans)
+                conTrue_i = conTrue_col{i};     % 1×6: true display order at each step
+                conRep_i  = conRep_col{i};      % 1×6: reported display order at each step
+                occupiedPos     = [];
+                seqStep         = 0;                % counts non-lure steps (1..nTrans)
 
                 for j = 1 : (nTrans + nDtr)
                     truePos = conTrue_i(j);
@@ -676,22 +736,34 @@ for iGrp = 1 : nGroup %% younger and older adults
                         seqPos    = seqStep;
                         trueImgId = imgIds(truePos);
 
-                        % Proximal set: top-conProxK of ALL 5 other displayed positions.
-                        % Fixed regardless of occupancy, so the definition does not change
-                        % as the available pool shrinks across steps.
-                        allOtherPos  = setdiff(1:(nTrans+nDtr), truePos);   % all 5 others
-                        allOtherSims = arrayfun(@(kk) conSimMat(trueImgId, imgIds(kk)), allOtherPos);
-                        [~, sortIdx] = sort(allOtherSims, 'descend');
-                        proxPos      = allOtherPos(sortIdx(1 : min(conProxK, length(allOtherPos))));
+                        % Proximal set: top-conProxK most similar images among ALL 8 images
+                        % (not just the 5 displayed others). This mirrors the location logic
+                        % where the 2 proximal slots are defined on the full 8-position circle
+                        % and only those that happen to be displayed count as available.
+                        % proxPos holds the display positions of those globally-proximal images.
+                        allImgIds    = 1 : size(conSimMat, 1);                          % all 8 image IDs
+                        otherImgIds  = setdiff(allImgIds, trueImgId);                   % 7 non-true images
+                        [~, sortIdx] = sort(conSimMat(trueImgId, otherImgIds), 'descend');
+                        proxImgIds   = otherImgIds(sortIdx(1 : conProxK));              % top-2 globally
+                        proxPos      = find(ismember(imgIds, proxImgIds) & (1:(nTrans+nDtr)) ~= truePos);
 
-                        % Chance: proximal images still available / total available
+                        truePosIsFree = ~ismember(truePos, occupiedPos);
+
+                        % Chance (pre-response pool): accumulated for ALL non-lure steps
+                        % and separately for steps where the true position is still free.
                         availPos   = setdiff(1:(nTrans+nDtr), [truePos, occupiedPos]);
                         nAvail     = length(availPos);
                         nProxAvail = length(intersect(availPos, proxPos));
-                        conSimChanCnt               = conSimChanCnt               + nProxAvail;
-                        conSimChanTotal             = conSimChanTotal             + nAvail;
-                        conSimChanCntByPos(seqPos)  = conSimChanCntByPos(seqPos)  + nProxAvail;
+                        conSimChanCnt                = conSimChanCnt               + nProxAvail;
+                        conSimChanTotal              = conSimChanTotal             + nAvail;
+                        conSimChanCntByPos(seqPos)   = conSimChanCntByPos(seqPos)  + nProxAvail;
                         conSimChanTotalByPos(seqPos) = conSimChanTotalByPos(seqPos) + nAvail;
+                        if truePosIsFree
+                            conSimChanCnt_free                = conSimChanCnt_free               + nProxAvail;
+                            conSimChanTotal_free              = conSimChanTotal_free             + nAvail;
+                            conSimChanCntByPos_free(seqPos)   = conSimChanCntByPos_free(seqPos)  + nProxAvail;
+                            conSimChanTotalByPos_free(seqPos) = conSimChanTotalByPos_free(seqPos) + nAvail;
+                        end
                     end
 
                     % Track occupied display position for both lure and non-lure steps
@@ -701,7 +773,10 @@ for iGrp = 1 : nGroup %% younger and older adults
 
                     if isLure, continue; end  % no error classification for lure step
 
-                    % Classify error
+                    % Skip error classification if true position was already taken (forced error)
+                    if ~truePosIsFree,  continue; end
+
+                    % Classify error (conditioned on incorrect response)
                     if repPos == 0,       continue; end
                     if repPos == truePos, continue; end
 
@@ -718,15 +793,18 @@ for iGrp = 1 : nGroup %% younger and older adults
         end
 
         nErrCon = sum(conErrCnt);
+        % the two numbers denote 1) the proportion that participants chose the 'similar' images; 2) the proportion that participants chose the other images;
         if nErrCon > 0
-            conErrType_subj(iSub, :) = conErrCnt / nErrCon;
+            conErrType_subj(iSub, :) = conErrCnt / nErrCon; 
         end
+        % classification results for each response order
         for iP = 1 : nTrans
             nErrConPos = sum(conErrByPos_i(iP, :));
             if nErrConPos > 0
                 conErrByPos_subj(iSub, iP, :) = conErrByPos_i(iP, :) / nErrConPos;
             end
         end
+        % Inconsistent chance (all non-lure steps)
         if conSimChanTotal > 0
             conSimChance_subj(iSub) = conSimChanCnt / conSimChanTotal;
         end
@@ -735,7 +813,15 @@ for iGrp = 1 : nGroup %% younger and older adults
                 conSimChanceByPos_subj(iSub, iP) = conSimChanCntByPos(iP) / conSimChanTotalByPos(iP);
             end
         end
-
+        % Consistent chance (only when true position is free)
+        if conSimChanTotal_free > 0
+            conSimChance_free_subj(iSub) = conSimChanCnt_free / conSimChanTotal_free;
+        end
+        for iP = 1 : nTrans
+            if conSimChanTotalByPos_free(iP) > 0
+                conSimChanceByPos_free_subj(iSub, iP) = conSimChanCntByPos_free(iP) / conSimChanTotalByPos_free(iP);
+            end
+        end
         %% trial-by-trial full retrieval
         choice_both_iSub      = nan(nEpi, 5);
         choice_both_item_iSub = nan(nEpi, 5);
@@ -1568,16 +1654,20 @@ for iGrp = 1 : nGroup %% younger and older adults
     FA_lure_group{iGrp} = FA_lure_subj;
 
     % ----------Location error proximity analysis----------
-    locErrType_group{iGrp}      = locErrType_subj;
-    locErrByPos_group{iGrp}    = locErrByPos_subj;
-    proxChance_group{iGrp}     = proxChance_subj;
-    proxChanceByPos_group{iGrp} = proxChanceByPos_subj;
+    locErrType_group{iGrp}           = locErrType_subj;
+    locErrByPos_group{iGrp}          = locErrByPos_subj;
+    proxChance_group{iGrp}           = proxChance_subj;
+    proxChanceByPos_group{iGrp}      = proxChanceByPos_subj;
+    proxChance_free_group{iGrp}      = proxChance_free_subj;
+    proxChanceByPos_free_group{iGrp} = proxChanceByPos_free_subj;
 
     % ----------Content error proximity analysis----------
-    conErrType_group{iGrp}        = conErrType_subj;
-    conErrByPos_group{iGrp}       = conErrByPos_subj;
-    conSimChance_group{iGrp}      = conSimChance_subj;
-    conSimChanceByPos_group{iGrp} = conSimChanceByPos_subj;
+    conErrType_group{iGrp}               = conErrType_subj;
+    conErrByPos_group{iGrp}              = conErrByPos_subj;
+    conSimChance_group{iGrp}             = conSimChance_subj;
+    conSimChanceByPos_group{iGrp}        = conSimChanceByPos_subj;
+    conSimChance_free_group{iGrp}        = conSimChance_free_subj;
+    conSimChanceByPos_free_group{iGrp}   = conSimChanceByPos_free_subj;
 
     % ----------post-test accuracy across three learning curricula----------
     acc_group_post{iGrp} = acc_group{iGrp}(:, 6);
@@ -1779,8 +1869,8 @@ for iGrp = 1 : nGroup % YA and OA
         ];
 end
 %% save data for Figure 2E in the FlexibleBinding paper
-% save([CLdata_folder, 'transAcc_plot_YAOA_', suffixWord, '.mat'], 'transAcc_plot_group');
-% save([CLdata_folder, 'transAcc_plot_mjAvg_YAOA_', suffixWord, '.mat'], 'transAcc_plot_mjAvg_group');
+save([CLdata_folder, 'transAcc_plot_YAOA_', suffixWord, '.mat'], 'transAcc_plot_group');
+save([CLdata_folder, 'transAcc_plot_mjAvg_YAOA_', suffixWord, '.mat'], 'transAcc_plot_mjAvg_group');
 
 %% Figure 2E statistics
 %%% ------Reorganize the transAcc_plot_group.mat in order to run the statistical analysis------
@@ -2600,13 +2690,21 @@ disp('^^^^^^^^^^ Bonferroni-Holm corrected p: only the Figure 2H ^^^^^^^^^^ ')
 errTypeNames = {'younger', 'older'};
 
 % ---- Compute empirical chance reference (overall and per position) ----
+% Inconsistent: chance over all non-lure steps
 proxChance_all = [proxChance_group{1}; proxChance_group{2}];
 proxChance     = nanmean(proxChance_all);
-fprintf('Empirical chance proximity rate (occupancy-adjusted, mean across subjects): %.3f\n', proxChance)
+fprintf('Location chance (inconsistent — all steps): %.3f\n', proxChance)
+
+% Consistent: chance only when true slot was free (same filter as error metric)
+proxChance_free_all = [proxChance_free_group{1}; proxChance_free_group{2}];
+proxChance_free     = nanmean(proxChance_free_all);
+fprintf('Location chance (consistent  — true slot free): %.3f\n', proxChance_free)
 
 % Per-position chance: average across both groups
-proxChanceByPos_all = [proxChanceByPos_group{1}; proxChanceByPos_group{2}]; % (nSubAll x nTrans)
-proxChanceByPos     = nanmean(proxChanceByPos_all, 1); % 1 x nTrans
+proxChanceByPos_all = [proxChanceByPos_group{1}; proxChanceByPos_group{2}];
+proxChanceByPos     = nanmean(proxChanceByPos_all, 1);
+proxChanceByPos_free_all = [proxChanceByPos_free_group{1}; proxChanceByPos_free_group{2}];
+proxChanceByPos_free     = nanmean(proxChanceByPos_free_all, 1);
 
 % ---- Print summary ----
 disp('======== Location error proportions (proximity vs. non-proximity) ========')
@@ -2619,14 +2717,22 @@ for iGrp = 1 : nGroup
 end
 
 % ---- Statistical tests ----
-% (1) Proximity error rate vs. empirical chance (one-sample t-test)
-disp('-------- t-test: proximity rate vs. empirical chance --------')
+% (1) Proximity error rate vs. both chance references (one-sample t-test)
+disp('-------- t-test: proximity rate vs. inconsistent chance (all steps) --------')
 for iGrp = 1 : nGroup
     fprintf('%s\n', errTypeNames{iGrp})
     prox_iGrp = locErrType_group{iGrp}(:, 1);
     prox_iGrp(isnan(prox_iGrp)) = [];
     [h, p, ci, stats] = ttest(prox_iGrp, proxChance)
 end
+disp('-------- t-test: proximity rate vs. consistent chance (true slot free) --------')
+for iGrp = 1 : nGroup
+    fprintf('%s\n', errTypeNames{iGrp})
+    prox_iGrp = locErrType_group{iGrp}(:, 1);
+    prox_iGrp(isnan(prox_iGrp)) = [];
+    [h, p, ci, stats] = ttest(prox_iGrp, proxChance_free)
+end
+%
 % (2) Proximity error rate: YA vs. OA
 disp('-------- t-test: proximity rate YA vs. OA --------')
 [h, p_prox_age, ci, stats] = ttest2(locErrType_group{1}(:,1), locErrType_group{2}(:,1))
@@ -2649,7 +2755,8 @@ for iGrp = 1 : nGroup
     errorbar(bP, dat_avg, dat_sem, 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
     plot(bP, dat_avg, 'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', color_Grp(iGrp, :), 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.8); hold on
 end
-% plot([0.4, 3.1], [proxChance, proxChance], 'k--', 'LineWidth', 0.6); hold on;
+%plot([0.4, 3.1], [proxChance,      proxChance],      'k--',  'LineWidth', 0.6); hold on;  % inconsistent
+plot([0.4, 3.1], [proxChance_free, proxChance_free], 'k:',   'LineWidth', 0.6); hold on;  % consistent
 xlim([0.4, 3.1]);
 ylim([0, 1]);
 if figKey == 1
@@ -2698,40 +2805,48 @@ errLineWid   = (figKey == 0) * 3 + (figKey == 1) * 1.5;
 barPos_err   = [1; 2.5];
 
 % ---- Figure: semantic similarity heatmap ----
-imgLabels = {'car', 'castle', 'cat', 'cream', 'female', 'hat', 'key', 'sunflower'};
-nImg      = length(imgLabels);
-figure('Position', [100 100 340 300]), clf;
-imagesc(conSimMat);
-colormap(parula);
-caxis([0 1]);
-cb = colorbar;
-cb.Label.String = 'Wu-Palmer similarity';
-cb.FontSize     = 8;
-set(gca, 'XTick', 1 : nImg, 'XTickLabel', imgLabels, 'XTickLabelRotation', 40, ...
-         'YTick', 1 : nImg, 'YTickLabel', imgLabels, ...
-         'FontSize', 9, 'FontName', 'Arial', 'FontWeight', 'bold', ...
-         'LineWidth', 0.8, 'TickDir', 'out');
-axis square;
+% imgLabels = {'car', 'castle', 'cat', 'cream', 'female', 'hat', 'key', 'sunflower'};
+% nImg      = length(imgLabels);
+% figure('Position', [100 100 340 300]), clf;
+% imagesc(conSimMat);
+% colormap(parula);
+% caxis([0 1]);
+% cb = colorbar;
+% cb.Label.String = similaritySource;
+% cb.FontSize     = 8;
+% set(gca, 'XTick', 1 : nImg, 'XTickLabel', imgLabels, 'XTickLabelRotation', 40, ...
+%          'YTick', 1 : nImg, 'YTickLabel', imgLabels, ...
+%          'FontSize', 9, 'FontName', 'Arial', 'FontWeight', 'bold', ...
+%          'LineWidth', 0.8, 'TickDir', 'out');
+% axis square;
 % Annotate each cell with the similarity value.
 % Use white text where the cell is dark (sim > 0.65), black elsewhere.
-for r = 1 : nImg
-    for c = 1 : nImg
-        val    = conSimMat(r, c);
-        txtCol = (val > 0.65) * [1 1 1] + (val <= 0.65) * [0 0 0];
-        text(c, r, sprintf('%.2f', val), ...
-             'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
-             'FontSize', 7, 'FontName', 'Arial', 'Color', txtCol);
-    end
-end
-title('Semantic similarity (Wu-Palmer)', 'FontSize', 10, 'FontName', 'Arial');
-box off;
+% for r = 1 : nImg
+%     for c = 1 : nImg
+%         val    = conSimMat(r, c);
+%         txtCol = (val > 0.65) * [1 1 1] + (val <= 0.65) * [0 0 0];
+%         text(c, r, sprintf('%.2f', val), ...
+%              'HorizontalAlignment', 'center', 'VerticalAlignment', 'middle', ...
+%              'FontSize', 7, 'FontName', 'Arial', 'Color', txtCol);
+%     end
+% end
+% title('Semantic similarity (Wu-Palmer)', 'FontSize', 10, 'FontName', 'Arial');
+% box off;
 
+% Inconsistent: chance over all non-lure steps
 conSimChance_all = [conSimChance_group{1}; conSimChance_group{2}];
 conSimChance     = nanmean(conSimChance_all);
-fprintf('Empirical chance content-proximity rate (occupancy-adjusted, mean across subjects): %.3f\n', conSimChance)
+fprintf('Content chance (inconsistent — all steps): %.3f\n', conSimChance)
+
+% Consistent: chance only when true position was free (same filter as error metric)
+conSimChance_free_all = [conSimChance_free_group{1}; conSimChance_free_group{2}];
+conSimChance_free     = nanmean(conSimChance_free_all);
+fprintf('Content chance (consistent  — true pos free): %.3f\n', conSimChance_free)
 
 conSimChanceByPos_all = [conSimChanceByPos_group{1}; conSimChanceByPos_group{2}];
-conSimChanceByPos     = nanmean(conSimChanceByPos_all, 1);  % 1 × nTrans
+conSimChanceByPos     = nanmean(conSimChanceByPos_all, 1);
+conSimChanceByPos_free_all = [conSimChanceByPos_free_group{1}; conSimChanceByPos_free_group{2}];
+conSimChanceByPos_free     = nanmean(conSimChanceByPos_free_all, 1);
 
 % ---- Print summary ----
 disp('======== Content error proportions (proximity vs. non-proximity) ========')
@@ -2744,12 +2859,19 @@ for iGrp = 1 : nGroup
 end
 
 % ---- Statistical tests ----
-disp('-------- t-test: content proximity rate vs. empirical chance --------')
+disp('-------- t-test: content proximity rate vs. inconsistent chance (all steps) --------')
 for iGrp = 1 : nGroup
     fprintf('%s\n', errTypeNames{iGrp})
     prox_iGrp = conErrType_group{iGrp}(:, 1);
     prox_iGrp(isnan(prox_iGrp)) = [];
     [h, p, ci, stats] = ttest(prox_iGrp, conSimChance)
+end
+disp('-------- t-test: content proximity rate vs. consistent chance (true pos free) --------')
+for iGrp = 1 : nGroup
+    fprintf('%s\n', errTypeNames{iGrp})
+    prox_iGrp = conErrType_group{iGrp}(:, 1);
+    prox_iGrp(isnan(prox_iGrp)) = [];
+    [h, p, ci, stats] = ttest(prox_iGrp, conSimChance_free)
 end
 disp('-------- t-test: content proximity rate YA vs. OA --------')
 [h, p_con_prox_age, ci, stats] = ttest2(conErrType_group{1}(:,1), conErrType_group{2}(:,1))
@@ -2770,7 +2892,8 @@ for iGrp = 1 : nGroup
     plot(bP, dat_avg, 'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', color_Grp(iGrp, :), 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.8); hold on
 
 end
-% plot([0.4, 3.1], [conSimChance, conSimChance], 'k--', 'LineWidth', 0.6); hold on;
+plot([0.4, 3.1], [conSimChance,      conSimChance],      'k--', 'LineWidth', 0.6); hold on;  % inconsistent
+plot([0.4, 3.1], [conSimChance_free, conSimChance_free], 'k:',  'LineWidth', 0.6); hold on;  % consistent
 xlim([0.4, 3.1]);
 ylim([0, 1]);
 if figKey == 1
