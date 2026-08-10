@@ -274,14 +274,6 @@ conSimChanceByPos_both_group  = cell(1, nGroup);
 conSimChance_free_both_group  = cell(1, nGroup);
 conSimChanceByPos_free_both_group = cell(1, nGroup);
 
-% ------ Quantify the autocorrelated noise within each retrieval ------
-% For example, if participants made an error in the very first response of
-% the retrieval, whether they have larger probability to make error again
-% in the later responses
-
-
-
-
 %% loop over groups and participants
 suffixWord = expId;
 for iGrp = 1 : nGroup %% younger and older adults
@@ -565,7 +557,7 @@ for iGrp = 1 : nGroup %% younger and older adults
             bothRT_col{i} = bothRT_Ref;
         end
 
-                %% ---- Location error proximity analysis ----
+        %% ---- Location error proximity analysis ----
         % Data format: locTrue_i and locRep_i are both indexed by display slot j (1..6).
         %   locTrue_i(j) = the correct recall STEP for display slot j  (1..6)
         %   locRep_i(j)  = the actual recall STEP at which slot j was reported (0 = not reported)
