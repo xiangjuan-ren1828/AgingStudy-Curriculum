@@ -274,6 +274,9 @@ conSimChanceByPos_both_group  = cell(1, nGroup);
 conSimChance_free_both_group  = cell(1, nGroup);
 conSimChanceByPos_free_both_group = cell(1, nGroup);
 
+% ----------accuracy for each slot----------
+accSlot_group = cell(1, nGroup); 
+    
 %% loop over groups and participants
 suffixWord = expId;
 for iGrp = 1 : nGroup %% younger and older adults
@@ -378,6 +381,9 @@ for iGrp = 1 : nGroup %% younger and older adults
     conSimChanceByPos_both_subj       = nan(subLen, nTrans);
     conSimChance_free_both_subj       = nan(subLen, 1);
     conSimChanceByPos_free_both_subj  = nan(subLen, nTrans);
+
+    % ------ accuracy for each slot ------
+    accSlot_subj  = nan(subLen, nTrans, 3); % 3: object/location/full retrieval
 
     %%
     for iSub = 1 : subLen
@@ -1596,6 +1602,7 @@ for iGrp = 1 : nGroup %% younger and older adults
         slotCorr_marg_pos = nan(sum(~reconsOnly), nTrans);
         slotCorr_join_con = nan(nEpi, nTrans);
         slotCorr_join_pos = nan(nEpi, nTrans);
+        slotCorr_join     = nan(nEpi, nTrans);
         for iTrans = 1 : (nTrans)
             % ----Content reports in the marginal reports trials----
             slotCorr_marg_con(:, iTrans) = (conRep_threeRep_mat(:, iTrans) == iTrans);
@@ -1604,9 +1611,15 @@ for iGrp = 1 : nGroup %% younger and older adults
 
             % ----Content reports in the reconstruction reports trials----
             slotCorr_join_con(:, iTrans) = (conRep_reconRep_mat(:, iTrans) == iTrans);
-            % ----Position reports in the reconstruction reports
-            % trials----
+            % ----Position reports in the reconstruction reports trials----
             slotCorr_join_pos(:, iTrans) = (locRep_reconRep_mat(:, iTrans) == iTrans);
+            % ----Full retrieval----
+            slotCorr_join(:, iTrans)     = (conRep_reconRep_mat(:, iTrans) == iTrans) & (locRep_reconRep_mat(:, iTrans) == iTrans);
+
+            %%% Check the primacy and recency effects for partial and full retrievals
+            accSlot_subj(iSub, iTrans, 1) = nansum(slotCorr_marg_con(:, iTrans)) / length(slotCorr_marg_con(:, iTrans));
+            accSlot_subj(iSub, iTrans, 2) = nansum(slotCorr_marg_pos(:, iTrans)) / length(slotCorr_marg_pos(:, iTrans));
+            accSlot_subj(iSub, iTrans, 3) = nansum(slotCorr_join(:, iTrans)) / length(slotCorr_join(:, iTrans));
         end
 
         %% ----------Transition evidence----------
@@ -1951,6 +1964,8 @@ for iGrp = 1 : nGroup %% younger and older adults
     % ----------post-test accuracy across three learning curricula----------
     acc_group_post{iGrp} = acc_group{iGrp}(:, 6);
 
+    % ----------accuracy for each slot----------
+    accSlot_group{iGrp} = accSlot_subj;
 
     %% calculate the mean across subjects, for each report
     if iGrp == 1 % younger group
@@ -3349,6 +3364,29 @@ if figKey == 1
 end
 %ylabel('Full retrieval content proximity error proportion');
 box off;
+
+
+%% Accuracy in each slot as well the Primacy and Recency effects
+% added by XR @ August 13 2026
+
+
+colorGrp = [230, 85, 13; ...
+            253, 141, 60; ...
+            253, 190, 133; ...%% content report: 3 groups
+            49, 130, 189; ...
+            107, 174, 214; ...
+            189, 215, 231; ...%% position report: 3 groups
+            117, 107, 177; ...
+            158, 154, 200; ...
+            203, 201, 226; ...%% reconstruction report: 3 gruops
+            49, 163, 84; ...
+            116, 196, 118; ...
+            186, 228, 179] ./ 255; %% recons post-test: 3 groups
+
+
+  % ----------accuracy for each slot----------
+accSlot_group = cell(1, nGroup); 
+accSlot_subj  = nan(subLen, nTrans, 3); % 3: object/location/full retrieval
 
 %% ****** Part 2: different curricula together ******
 %% --------Overall accuracy: superpose the different curricula within a age group--------

@@ -44,7 +44,7 @@ yCir   = RChunk * sin(angCir) + centerY;
 
 expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
 nCond   = length(expList);
-expId   = expList{1};
+expId   = expList{3};
 if isequal(expId, 'interleaved')
     subjList_young = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
                       '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
@@ -418,8 +418,7 @@ for iGrp = 1 : nGroup %% younger and older adults
             acc_trial_subj(iSub, 3, i) = sum(acc_j) / nTrans;
             if i <= nEpi
                 choice_both_iSub(i, :) = acc_j;
-                % ------ Marginal reports in the reconstruction report
-                % ------
+                % ------ Marginal reports in the reconstruction report ------
                 choice_both_item_iSub(i, :) = (bothRep_i(1, 1 : nTrans) == (1 : 1 : nTrans));
                 choice_both_loc_iSub(i, :)  = (bothRep_i(2, 1 : nTrans) == (1 : 1 : nTrans));
 
@@ -755,34 +754,40 @@ for iGrp = 1 : nGroup %% younger and older adults
             end
         end
         % ------ error pattern correlation between partial and full retrieval ------
-        % -- object --
-        errConfMat_marg_obj_col = sum(errConfMat_marg_obj, 3); % sum across the two unique sequences
-        errConfMat_marg_obj_col = errConfMat_marg_obj_col(:);
-        errConfMat_full_obj_col = sum(errConfMat_full_obj, 3);
-        errConfMat_full_obj_col = errConfMat_full_obj_col(:);
-        % deleting zero entries
-        idx_valid = (errConfMat_marg_obj_col ~= 0) & (errConfMat_full_obj_col ~= 0);
-        if sum(idx_valid) > 2
-            A = errConfMat_marg_obj_col(idx_valid);
-            B = errConfMat_full_obj_col(idx_valid);
-            [r1, p1] = corr(A, B, 'Type', 'Pearson');
-            [r2, p2] = corr(A, B, 'Type', 'Spearman');
-            errPattern_cor_subj(iSub, 1, :) = [r1, r2];
+        corr_seq = nan(2, 2, 2); % 1st 2: object and location dimension; 2nd 2: Pearson and Spearman; 3rd 2: two unique sequences per dimension
+        for iSeq = 1 : 2 % calculate the correlations for the two unique sequences separately before averaging
+            % -- object --
+            errConfMat_marg_obj_col = errConfMat_marg_obj(:, :, iSeq); % sum(errConfMat_marg_obj, 3); % sum across the two unique sequences
+            errConfMat_marg_obj_col = errConfMat_marg_obj_col(:);
+            errConfMat_full_obj_col = errConfMat_full_obj(:, :, iSeq); % sum(errConfMat_full_obj, 3);
+            errConfMat_full_obj_col = errConfMat_full_obj_col(:);
+            % deleting zero entries
+            idx_valid = (errConfMat_marg_obj_col ~= 0) & (errConfMat_full_obj_col ~= 0);
+            if sum(idx_valid) > 2
+                A = errConfMat_marg_obj_col(idx_valid);
+                B = errConfMat_full_obj_col(idx_valid);
+                [r1, p1] = corr(A, B, 'Type', 'Pearson');
+                [r2, p2] = corr(A, B, 'Type', 'Spearman');
+                corr_seq(1, :, iSeq) = [r1, r2];
+            end
+            % -- location --
+            errConfMat_marg_loc_col = errConfMat_marg_loc(:, :, iSeq); % sum(errConfMat_marg_loc, 3); % sum across the two unique sequences
+            errConfMat_marg_loc_col = errConfMat_marg_loc_col(:);
+            errConfMat_full_loc_col = errConfMat_full_loc(:, :, iSeq); % sum(errConfMat_full_loc, 3);
+            errConfMat_full_loc_col = errConfMat_full_loc_col(:);
+            % deleting zero entries
+            idx_valid = (errConfMat_marg_loc_col ~= 0) & (errConfMat_full_loc_col ~= 0);
+            if sum(idx_valid) > 2
+                A = errConfMat_marg_loc_col(idx_valid);
+                B = errConfMat_full_loc_col(idx_valid);
+                [r1, p1] = corr(A, B, 'Type', 'Pearson');
+                [r2, p2] = corr(A, B, 'Type', 'Spearman');
+                corr_seq(2, :, iSeq) = [r1, r2];
+            end
         end
-        % -- location --
-        errConfMat_marg_loc_col = sum(errConfMat_marg_loc, 3); % sum across the two unique sequences
-        errConfMat_marg_loc_col = errConfMat_marg_loc_col(:);
-        errConfMat_full_loc_col = sum(errConfMat_full_loc, 3);
-        errConfMat_full_loc_col = errConfMat_full_loc_col(:);
-        % deleting zero entries
-        idx_valid = (errConfMat_marg_loc_col ~= 0) & (errConfMat_full_loc_col ~= 0);
-        if sum(idx_valid) > 2
-            A = errConfMat_marg_loc_col(idx_valid);
-            B = errConfMat_full_loc_col(idx_valid);
-            [r1, p1] = corr(A, B, 'Type', 'Pearson');
-            [r2, p2] = corr(A, B, 'Type', 'Spearman');
-            errPattern_cor_subj(iSub, 2, :) = [r1, r2];
-        end
+        corr_seq_avg = nanmean(corr_seq, 3);
+        errPattern_cor_subj(iSub, 1, :) = corr_seq_avg(1, :);
+        errPattern_cor_subj(iSub, 2, :) = corr_seq_avg(2, :);
 
     end
     err_ratio_group{1, iGrp} = err_ratio_marg_subj;
@@ -994,9 +999,11 @@ end
 
 figKey = 1;
 errLineWid = (figKey == 0) * 3 + (figKey == 1) * 1.5;
-barPos_err = [1; 2.5];  % one bar for object and location
+barPos_err = [1, 1.5; ... % one bar for object and location: YA
+              2.2, 2.7];  % OA
+figure('Position', [100 100 200 180]), clf;
 for iGrp = 1 : nGroup
-    figure('Position', [100 100 180 180]), clf;
+    bP_iGrp = barPos_err(iGrp, :);
     error_csScore_iGrp      = error_consistencyScore_group{1, iGrp}; % (subLen * 2)
     error_csScore_iGrp_nSim = error_consistencyScore_group{2, iGrp}; % (subLen * 2 * nSim)
 
@@ -1009,24 +1016,24 @@ for iGrp = 1 : nGroup
         elseif ii == 2
             colorDim = colorGrad_loc(1, :);
         end
-        bP = barPos_err(ii);
-        xRand_iGrp = unifrnd(bP - 0.2, bP + 0.2, size(error_csScore_iGrp, 1), 1);
+        bP = bP_iGrp(ii);
+        xRand_iGrp = unifrnd(bP - 0.12, bP + 0.12, size(error_csScore_iGrp, 1), 1);
         xRand_color = 0.4 * colorDim + 0.6 * [1, 1, 1];
         for iSub = 1 : size(error_csScore_iGrp, 1)
-            plot(xRand_iGrp(iSub), error_csScore_iGrp(iSub), 'Marker', 'o', 'MarkerSize', 6, 'MarkerFaceColor', xRand_color, 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.6); hold on;
+            plot(xRand_iGrp(iSub), error_csScore_iGrp(iSub, ii), 'Marker', 'o', 'MarkerSize', 6, 'MarkerFaceColor', xRand_color, 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.6); hold on;
         end
         errorbar(bP, errAvg(ii), errSem(ii), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
         plot(bP, errAvg(ii), 'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', colorDim, 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.8); hold on;
         % ------ simulated chance level ------
-        plot([bP - 0.25, bP + 0.25], [simAvg(ii), simAvg(ii)], 'k-', 'LineWidth', 1.5); hold on;
+        plot([bP - 0.2, bP + 0.2], [simAvg(ii), simAvg(ii)], 'k-', 'LineWidth', 1.5); hold on;
     end
 
-    xlim([0.4, 3.1]);
+    xlim([0.4, 3.3]);
     ylim([0, 1]);
     if figKey == 1
         set(gca, 'LineWidth', 0.8, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-        set(gca, 'XTick', barPos_err', 'XTickLabel', {'obj', 'loc'});
-        %set(gca, 'YTick', 0 : 0.25 : 1, 'YTickLabel', {'0', '0.25', '0.5', '0.75', '1'});
+        set(gca, 'XTick', [1.3, 2.5], 'XTickLabel', {'', ''});
+        set(gca, 'YTick', 0 : 0.25 : 1, 'YTickLabel', {'0', '0.25', '0.5', '0.75', '1'});
     end
     %ylabel('Proximity error proportion');
     box off;
@@ -1040,27 +1047,28 @@ end
 % errPattern_cor_subj = nan(subLen, 2, 2); % 1st 2: object and locaton dimension; 2nd 2: Pearson and Spearman's r
 
 figKey = 1;
-errLineWid = (figKey == 0) * 3 + (figKey == 1) * 1.5;
-barPos_err = [1; 2.5];  % one bar for object and location
+barPos_err = [1, 1.5; ... % one bar for object and location: YA
+              2.2, 2.7];  % OA
 statMat = nan(nGroup, 4, 2);
-for iGrp = 1 : nGroup
-    if iGrp == 1
-        disp('------ YA ------');
-    elseif iGrp == 2
-        disp('------ OA ------');
+for iCr = 1 : 2 % two correlation methods: Pearson and Spearman
+    if iCr == 1
+        disp('------ Pearson ------');
+    elseif iCr == 2
+        disp('------ Spearman ------');
     end
-    errPattern_cor_iGrp = errPattern_cor_group{iGrp};
-    [errP_avg, errP_sem] = Mean_and_Se(errPattern_cor_iGrp, 1);
-    errP_avg = squeeze(errP_avg); 
-    errP_sem = squeeze(errP_sem);
-
-    for iCr = 1 : 2 % two correlation methods: Pearson and Spearman
-        if iCr == 1
-            disp('------ Pearson ------');
-        elseif iCr == 2
-            disp('------ Spearman ------');
+    figure('Position', [100 100 200 180]), clf;
+    for iGrp = 1 : nGroup
+        bP_iGrp = barPos_err(iGrp, :);
+        if iGrp == 1
+            disp('------ YA ------');
+        elseif iGrp == 2
+            disp('------ OA ------');
         end
-        figure('Position', [100 100 180 180]), clf;
+        errPattern_cor_iGrp = errPattern_cor_group{iGrp};
+        [errP_avg, errP_sem] = Mean_and_Se(errPattern_cor_iGrp, 1);
+        errP_avg = squeeze(errP_avg);
+        errP_sem = squeeze(errP_sem);
+
         for ii = 1 : 2 % object and location dimension
             if ii == 1
                 colorDim = colorGrad_obj(1, :);
@@ -1069,8 +1077,8 @@ for iGrp = 1 : nGroup
                 colorDim = colorGrad_loc(1, :);
                 disp('------ location ------');
             end
-            bP = barPos_err(ii);
-            xRand_iGrp = unifrnd(bP - 0.2, bP + 0.2, size(errPattern_cor_iGrp, 1), 1);
+            bP = bP_iGrp(ii);
+            xRand_iGrp = unifrnd(bP - 0.12, bP + 0.12, size(errPattern_cor_iGrp, 1), 1);
             xRand_color = 0.4 * colorDim + 0.6 * [1, 1, 1];
             for iSub = 1 : size(errPattern_cor_iGrp, 1)
                 plot(xRand_iGrp(iSub), errPattern_cor_iGrp(iSub, ii, iCr), 'Marker', 'o', 'MarkerSize', 6, 'MarkerFaceColor', xRand_color, 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.6); hold on;
@@ -1083,16 +1091,15 @@ for iGrp = 1 : nGroup
             idx_stat = ii * 2 - 1 : ii * 2;
             statMat(iGrp, idx_stat, iCr) = [p, stats.tstat];
         end
-        xlim([0.4, 3.1]);
-        ylim([0, 1]);
-        if figKey == 1
-            set(gca, 'LineWidth', 0.8, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
-            set(gca, 'XTick', barPos_err', 'XTickLabel', {'obj', 'loc'});
-            %set(gca, 'YTick', 0 : 0.25 : 1, 'YTickLabel', {'0', '0.25', '0.5', '0.75', '1'});
-        end
-        %ylabel('Proximity error proportion');
-        box off;
-
     end
+    xlim([0.4, 3.3]);
+    ylim([-1, 1]);
+    if figKey == 1
+        set(gca, 'LineWidth', 0.8, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
+        set(gca, 'XTick', [1.3, 2.5], 'XTickLabel', {'', ''});
+        set(gca, 'YTick', [-1, 0, 1], 'YTickLabel', {'-1', '0', '1'});
+    end
+    %ylabel('Proximity error proportion');
+    box off;
 end
 
