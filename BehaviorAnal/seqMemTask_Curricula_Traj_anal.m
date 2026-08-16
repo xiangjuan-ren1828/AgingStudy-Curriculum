@@ -44,7 +44,7 @@ yCir   = RChunk * sin(angCir) + centerY;
 
 expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
 nCond   = length(expList);
-expId   = expList{3};
+expId   = expList{1};
 if isequal(expId, 'interleaved')
     subjList_young = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
                       '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...

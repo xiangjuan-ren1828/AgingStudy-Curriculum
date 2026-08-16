@@ -3368,25 +3368,42 @@ box off;
 
 %% Accuracy in each slot as well the Primacy and Recency effects
 % added by XR @ August 13 2026
+% accSlot_group = cell(1, nGroup); 
+% accSlot_subj  = nan(subLen, nTrans, 3); % 3: object/location/full retrieval
+figKey = 1;
+errLineWid = (figKey == 0) * 3 + (figKey == 1) * 1.5;
+primacy_recency_statMat = nan(2, 2, 3, nGroup); % 1st 2: primacy and recency; 2nd 2: p and tstat
+for iGrp = 1 : nGroup %% interleaved, contentBlocked and positionBlocked
+    color_Grp = colorGrp([iGrp, iGrp+3, iGrp+6], :);
+    figure('Position', [100 100 250 150]), clf;
+    accSlot_i = accSlot_group{iGrp};
+    [acc_avg, acc_sem] = Mean_and_Se(accSlot_i, 1);
+    acc_avg = squeeze(acc_avg); % (nTrans, 3)
+    acc_sem = squeeze(acc_sem);
+    for iR = 1 : 3 % 3 types of retrieval: object/location/full
+        errorbar(1 : 1 : nTrans, acc_avg(:, iR), acc_sem(:, iR), 'Color', color_Grp(iR, :), 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
+        plot(1 : 1 : nTrans, acc_avg(:, iR), 'Marker', '.', 'MarkerSize', 15, 'Color', color_Grp(iR, :), 'LineStyle', 'none'); hold on;
+    end
+    xlim([0.5, nTrans + 0.5]);
+    ylim([0, 1]);
+    set(gca, 'LineWidth', 0.8);
+    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
+    set(gca, 'XTick', 1 : 1 : nTrans, 'XTickLabel', 1 : 1 : nTrans);
+    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', 0 : 0.5 : 1);
+    box off;
 
+    %% statistical tests for primacy and recency effects
+    for iR = 1 : 3 % 3 types of retrieval: object/location/full
+        % ------ primacy effects ------
+        [h, p, ci, stats] = ttest(accSlot_i(:, 1, iR), accSlot_i(:, 3, iR));
+        primacy_recency_statMat(1, :, iR, iGrp) = [p, stats.tstat];
 
-colorGrp = [230, 85, 13; ...
-            253, 141, 60; ...
-            253, 190, 133; ...%% content report: 3 groups
-            49, 130, 189; ...
-            107, 174, 214; ...
-            189, 215, 231; ...%% position report: 3 groups
-            117, 107, 177; ...
-            158, 154, 200; ...
-            203, 201, 226; ...%% reconstruction report: 3 gruops
-            49, 163, 84; ...
-            116, 196, 118; ...
-            186, 228, 179] ./ 255; %% recons post-test: 3 groups
+        % ------ recency effects ------
+        [h, p, ci, stats] = ttest(accSlot_i(:, 5, iR), accSlot_i(:, 3, iR));
+        primacy_recency_statMat(2, :, iR, iGrp) = [p, stats.tstat];
+    end
+end
 
-
-  % ----------accuracy for each slot----------
-accSlot_group = cell(1, nGroup); 
-accSlot_subj  = nan(subLen, nTrans, 3); % 3: object/location/full retrieval
 
 %% ****** Part 2: different curricula together ******
 %% --------Overall accuracy: superpose the different curricula within a age group--------

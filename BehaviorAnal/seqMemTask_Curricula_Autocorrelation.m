@@ -44,7 +44,7 @@ yCir   = RChunk * sin(angCir) + centerY;
 
 expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
 nCond   = length(expList);
-expId   = expList{3};
+expId   = expList{1};
 if isequal(expId, 'interleaved')
     subjList_young = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
                       '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
@@ -163,6 +163,12 @@ error_consistencyScore_group = cell(2, nGroup); % 1: real data; 2: simulations;
 %%% ------ correlation between error patterns which were
 %%% accumulated across trials ------
 errPattern_cor_group = cell(1, nGroup);
+
+% ------ long-format rows for the lag-1 autocorrelation mixed-effects model ------
+% one row per (subject, trial, slot >= 2): whether the correct item for
+% that slot was still available (avail == 1) excludes slots that were
+% structurally forced to be wrong by an earlier, unrelated mis-pick.
+lme_dataChunks = {};
 
 %%
 suffixWord = expId;
@@ -536,22 +542,68 @@ for iGrp = 1 : nGroup %% younger and older adults
                 end
             end
 
+            % ------ long-format rows for the lag-1 autocorrelation model ------
+            % uses every trial and every slot >= 2 (not just the 4
+            % hand-picked "first error at position X" subsets), and masks
+            % out slots whose correct item was already consumed earlier
+            % in that same trial (avail == 0), so forced/structural
+            % errors at ANY lag are excluded, not just the slot
+            % immediately after the flagged error.
+            retrievalName = {'partial', 'full'};
+            for iDim = 1 : 2 % 1: object, 2: location
+                if iDim == 1
+                    slotCorr_dim = slotCorr_con;
+                    avail_dim    = correctResp_avail_con;
+                elseif iDim == 2
+                    slotCorr_dim = slotCorr_pos;
+                    avail_dim    = correctResp_avail_pos;
+                end
+                prevCorrect_mat = slotCorr_dim(:, 1 : end - 1); % slot (t-1), t = 2..nTrans
+                correct_mat     = slotCorr_dim(:, 2 : end);     % slot t
+                slotPos_mat     = repmat(2 : nTrans, trlLen_temp, 1);
+                trial_mat       = repmat((1 : trlLen_temp)', 1, nTrans - 1);
+
+                dimName = "object";
+                if iDim == 2
+                    dimName = "location";
+                end
+                nRow = numel(correct_mat);
+                chunk = table;
+                chunk.subjID      = repmat(string(subjBv), nRow, 1);
+                chunk.group       = repmat(string(groupName), nRow, 1);
+                chunk.retrieval   = repmat(string(retrievalName{ij}), nRow, 1);
+                chunk.dimension   = repmat(dimName, nRow, 1);
+                chunk.trial       = trial_mat(:);
+                chunk.slotPos     = slotPos_mat(:);
+                chunk.prevCorrect = double(prevCorrect_mat(:));
+                chunk.correct     = double(correct_mat(:));
+                chunk.avail       = avail_dim(:);
+
+                lme_dataChunks{end + 1} = chunk; %#ok<SAGROW>
+            end
+
             for iConds = 1 : 4 % 4 conditions
                 if iConds == 1
-                    err_idx_item = find(slotCorr_con(:, 1) == 0 & correctResp_avail_con(:, 1) == 1); % previous respone is wrong and correct option in the current response is still available
-                    err_idx_loc  = find(slotCorr_pos(:, 1) == 0 & correctResp_avail_pos(:, 1) == 1);
+                    err_idx_item = find(slotCorr_con(:, 1) == 0 ...
+                                        & correctResp_avail_con(:, 1) == 1 & correctResp_avail_con(:, 2) == 1 ...
+                                        & correctResp_avail_con(:, 3) == 1 & correctResp_avail_con(:, 4) == 1); % previous respone is wrong and correct option in the current response is still available
+                    err_idx_loc  = find(slotCorr_pos(:, 1) == 0 ...
+                                        & correctResp_avail_pos(:, 1) == 1 & correctResp_avail_pos(:, 2) == 1 ...
+                                        & correctResp_avail_pos(:, 3) == 1 & correctResp_avail_pos(:, 4) == 1);
 
                 elseif iConds == 2
                     err_idx_item = find(slotCorr_con(:, 1) == 1 & slotCorr_con(:, 2) == 0 ...
-                                        & correctResp_avail_con(:, 2) == 1);
+                                        & correctResp_avail_con(:, 2) == 1 ...
+                                        & correctResp_avail_con(:, 3) == 1 & correctResp_avail_con(:, 4) == 1);
                     err_idx_loc  = find(slotCorr_pos(:, 1) == 1 & slotCorr_pos(:, 2) == 0 ...
-                                        & correctResp_avail_pos(:, 2) == 1);
+                                        & correctResp_avail_pos(:, 2) == 1 ...
+                                        & correctResp_avail_pos(:, 3) == 1 & correctResp_avail_pos(:, 4) == 1);
 
                 elseif iConds == 3
                     err_idx_item = find(slotCorr_con(:, 1) == 1 & slotCorr_con(:, 2) == 1 & slotCorr_con(:, 3) == 0 ...
-                                        & correctResp_avail_con(:, 3) == 1);
+                                        & correctResp_avail_con(:, 3) == 1 & correctResp_avail_con(:, 4) == 1);
                     err_idx_loc  = find(slotCorr_pos(:, 1) == 1 & slotCorr_pos(:, 2) == 1 & slotCorr_pos(:, 3) == 0 ...
-                                        & correctResp_avail_pos(:, 3) == 1);
+                                        & correctResp_avail_pos(:, 3) == 1 & correctResp_avail_pos(:, 4) == 1);
 
                 elseif iConds == 4
                     err_idx_item = find(slotCorr_con(:, 1) == 1 & slotCorr_con(:, 2) == 1 & slotCorr_con(:, 3) == 1 & slotCorr_con(:, 4) == 0 ...
@@ -803,6 +855,48 @@ for iGrp = 1 : nGroup %% younger and older adults
     %%% accumulated across trials ------
     errPattern_cor_group{iGrp} = errPattern_cor_subj;
 
+end
+
+%% Mixed-effects logistic regression for lag-1 autocorrelated noise
+% Requires Statistics and Machine Learning Toolbox (fitglme).
+% Replaces the "conditional accuracy vs. theoretical chance" comparison
+% above with a direct test of serial dependency: does getting slot (t-1)
+% wrong predict getting slot t wrong, above and beyond slot position and
+% group, using ALL trials (not a hand-selected "first error at X" subset)
+% with subject as a random effect to absorb between-subject baseline
+% differences?
+lme_data = vertcat(lme_dataChunks{:});
+lme_data.subjID     = categorical(lme_data.subjID);
+lme_data.group      = categorical(lme_data.group, {'younger', 'older'});
+lme_data.retrieval  = categorical(lme_data.retrieval, {'partial', 'full'});
+lme_data.dimension  = categorical(lme_data.dimension, {'object', 'location'});
+
+% exclude slots whose correct item had already been consumed earlier in
+% the trial -- these would be wrong regardless of memory/attention, and
+% are not informative about autocorrelated noise (see comment above).
+lme_data_valid = lme_data(lme_data.avail == 1, :);
+
+retrievalLevels = categories(lme_data_valid.retrieval);
+dimensionLevels = categories(lme_data_valid.dimension);
+lme_models = cell(numel(retrievalLevels), numel(dimensionLevels));
+for iRet = 1 : numel(retrievalLevels)
+    for iDim = 1 : numel(dimensionLevels)
+        subData = lme_data_valid(lme_data_valid.retrieval == retrievalLevels{iRet} & ...
+                                  lme_data_valid.dimension == dimensionLevels{iDim}, :);
+        fprintf('\n------ %s retrieval, %s dimension ------\n', retrievalLevels{iRet}, dimensionLevels{iDim});
+        try
+            mdl = fitglme(subData, ...
+                'correct ~ prevCorrect * group + slotPos + (prevCorrect | subjID)', ...
+                'Distribution', 'Binomial', 'Link', 'logit');
+        catch mErr
+            warning('Random-slope model failed to converge (%s); falling back to random-intercept-only model.', mErr.message);
+            mdl = fitglme(subData, ...
+                'correct ~ prevCorrect * group + slotPos + (1 | subjID)', ...
+                'Distribution', 'Binomial', 'Link', 'logit');
+        end
+        disp(mdl);
+        lme_models{iRet, iDim} = mdl;
+    end
 end
 
 %% color settings
@@ -1102,4 +1196,96 @@ for iCr = 1 : 2 % two correlation methods: Pearson and Spearman
     %ylabel('Proximity error proportion');
     box off;
 end
+
+%% Visualize the mixed-effects logistic regression results (lag-1 autocorrelation)
+% Two figures:
+% (1) model-predicted P(correct) after a correct vs. an erroneous
+%     previous slot, by group -- the model-based counterpart of the
+%     "conditional accuracy vs. chance" comparison earlier in the script,
+%     now with proper CIs and subject random effects instead of a
+%     theoretical chance-level reference line.
+% (2) a forest plot of the prevCorrect fixed-effect coefficient (the
+%     autocorrelation effect, in log-odds) across the 4 retrieval x
+%     dimension models, so the sign/significance pattern can be read at
+%     a glance.
+colorGrp_lme     = [230, 85, 13; 49, 130, 189] ./ 255; % 1: younger; 2: older
+groupLevels_lme  = {'younger', 'older'};
+prevLevels_lme   = [0, 1]; % 0: previous slot correct; 1: previous slot error
+slotPos_ref      = mean(lme_data_valid.slotPos);
+refSubj          = lme_data_valid.subjID(1); % placeholder level; unused since Conditional = false
+
+% ------ (1) predicted probability by prevCorrect x group ------
+figure('Position', [100 100 500 400]), clf;
+plotIdx = 0;
+for iRet = 1 : numel(retrievalLevels)
+    for iDim = 1 : numel(dimensionLevels)
+        plotIdx = plotIdx + 1;
+        mdl = lme_models{iRet, iDim};
+        subplot(2, 2, plotIdx);
+        if isempty(mdl)
+            continue
+        end
+
+        [pv, gv] = ndgrid(prevLevels_lme, 1 : 2);
+        newT = table();
+        newT.prevCorrect = pv(:);
+        newT.group       = categorical(groupLevels_lme(gv(:))', {'younger', 'older'});
+        newT.slotPos     = repmat(slotPos_ref, numel(pv), 1);
+        newT.subjID      = repmat(refSubj, numel(pv), 1);
+
+        [yPred, yCI] = predict(mdl, newT, 'Conditional', false, 'Alpha', 0.05);
+
+        barPos_prev = [0.7, 1.1]; % prevCorrect = 0, 1
+        for iG = 1 : 2
+            rowIdx = (gv(:) == iG);
+            yG     = yPred(rowIdx);
+            ciLo   = yCI(rowIdx, 1);
+            ciUp   = yCI(rowIdx, 2);
+            xOff   = (iG - 1.5) * 0.3; % small horizontal offset between groups
+            errorbar(barPos_prev + xOff, yG, yG - ciLo, ciUp - yG, ...
+                'Color', colorGrp_lme(iG, :), 'LineStyle', '-', 'Marker', 'o', ...
+                'MarkerFaceColor', colorGrp_lme(iG, :), 'MarkerSize', 6, 'LineWidth', 1.2); hold on;
+        end
+        xlim([0.3, 1.5]);
+        ylim([0, 1]);
+        set(gca, 'XTick', barPos_prev, 'XTickLabel', {'prev correct', 'prev error'}, ...
+            'LineWidth', 0.8, 'FontSize', 9, 'FontName', 'Arial');
+        title(sprintf('%s / %s', retrievalLevels{iRet}, dimensionLevels{iDim}), 'Interpreter', 'none');
+        ylabel('Predicted P(correct)');
+        box off;
+    end
+end
+
+% ------ (2) forest plot of the prevCorrect (autocorrelation) coefficient ------
+figure('Position', [100 100 280 220]), clf;
+yTickLabels = {};
+yPosCounter = 0;
+for iRet = 1 : numel(retrievalLevels)
+    for iDim = 1 : numel(dimensionLevels)
+        mdl = lme_models{iRet, iDim};
+        if isempty(mdl)
+            continue
+        end
+        coefTbl = mdl.Coefficients;
+        rowIdx  = strcmp(coefTbl.Name, 'prevCorrect');
+        est     = coefTbl.Estimate(rowIdx);
+        ciLo    = coefTbl.Lower(rowIdx);
+        ciUp    = coefTbl.Upper(rowIdx);
+
+        yPosCounter = yPosCounter + 1;
+        colorDim = colorGrad_obj(1, :);
+        if iDim == 2
+            colorDim = colorGrad_loc(1, :);
+        end
+        errorbar(est, yPosCounter, est - ciLo, ciUp - est, 'horizontal', ...
+            'Color', colorDim, 'Marker', 'o', 'MarkerFaceColor', colorDim, ...
+            'MarkerSize', 6, 'LineWidth', 1.2); hold on;
+        yTickLabels{yPosCounter} = sprintf('%s-%s', retrievalLevels{iRet}, dimensionLevels{iDim}); %#ok<SAGROW>
+    end
+end
+plot([0, 0], ylim, 'k--', 'LineWidth', 0.6); hold on; % null (no autocorrelation) reference
+set(gca, 'YTick', 1 : yPosCounter, 'YTickLabel', yTickLabels, 'YDir', 'reverse', ...
+    'LineWidth', 0.8, 'FontSize', 9, 'FontName', 'Arial');
+xlabel('prevCorrect coefficient (log-odds of current-slot correctness)');
+box off;
 
