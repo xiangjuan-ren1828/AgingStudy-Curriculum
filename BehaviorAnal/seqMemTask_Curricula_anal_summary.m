@@ -383,7 +383,7 @@ for iGrp = 1 : nGroup %% younger and older adults
     conSimChanceByPos_free_both_subj  = nan(subLen, nTrans);
 
     % ------ accuracy for each slot ------
-    accSlot_subj  = nan(subLen, nTrans, 3); % 3: object/location/full retrieval
+    accSlot_subj  = nan(subLen, nTrans, 4); % 3: object/location/full retrieval in the 3-retrieval trials/full retrieval in the full-retrieval-only trials
 
     %%
     for iSub = 1 : subLen
@@ -1619,7 +1619,10 @@ for iGrp = 1 : nGroup %% younger and older adults
             %%% Check the primacy and recency effects for partial and full retrievals
             accSlot_subj(iSub, iTrans, 1) = nansum(slotCorr_marg_con(:, iTrans)) / length(slotCorr_marg_con(:, iTrans));
             accSlot_subj(iSub, iTrans, 2) = nansum(slotCorr_marg_pos(:, iTrans)) / length(slotCorr_marg_pos(:, iTrans));
-            accSlot_subj(iSub, iTrans, 3) = nansum(slotCorr_join(:, iTrans)) / length(slotCorr_join(:, iTrans));
+            % ------ full retrieval in the 3-retrieval trials ------
+            accSlot_subj(iSub, iTrans, 3) = nansum(slotCorr_join(reconsOnly == 0, iTrans)) / length(slotCorr_join(reconsOnly == 0, iTrans));
+            % ------ full retrieval in the full-retrieval-only trials ------
+            accSlot_subj(iSub, iTrans, 4) = nansum(slotCorr_join(reconsOnly == 1, iTrans)) / length(slotCorr_join(reconsOnly == 1, iTrans));
         end
 
         %% ----------Transition evidence----------
@@ -3060,6 +3063,9 @@ if figKey == 1
 end
 %ylabel('Proximity error proportion');
 box off;
+ax = gca;
+save_name = 'LocationConfusion.png';
+exportgraphics(ax, save_name, 'Resolution', 600);
 
 % ---- Figure: proximity error rate by sequence position ----
 % Chance reference is per-position (occupancy-adjusted), shown as a dashed line.
@@ -3197,6 +3203,9 @@ if figKey == 1
 end
 %ylabel('Content proximity error proportion');
 box off;
+ax = gca;
+save_name = 'ImgeConfusion.png';
+exportgraphics(ax, save_name, 'Resolution', 600);
 
 % ---- Figure: content proximity error rate by recall step ----
 % figure('Position', [100 100 280 180]), clf;
@@ -3372,15 +3381,17 @@ box off;
 % accSlot_subj  = nan(subLen, nTrans, 3); % 3: object/location/full retrieval
 figKey = 1;
 errLineWid = (figKey == 0) * 3 + (figKey == 1) * 1.5;
-primacy_recency_statMat = nan(2, 2, 3, nGroup); % 1st 2: primacy and recency; 2nd 2: p and tstat
+primacy_recency_statMat = nan(2, 2, 4, nGroup); % 1st 2: primacy and recency; 2nd 2: p and tstat
 for iGrp = 1 : nGroup %% interleaved, contentBlocked and positionBlocked
-    color_Grp = colorGrp([iGrp, iGrp+3, iGrp+6], :);
+    color_Grp = nan(4, 3);
+    color_Grp(1 : 3, :) = colorGrp([iGrp, iGrp+3, iGrp+6], :);
+    color_Grp(4, :)     = [0.4, 0.4, 0.4];
     figure('Position', [100 100 250 150]), clf;
     accSlot_i = accSlot_group{iGrp};
     [acc_avg, acc_sem] = Mean_and_Se(accSlot_i, 1);
     acc_avg = squeeze(acc_avg); % (nTrans, 3)
     acc_sem = squeeze(acc_sem);
-    for iR = 1 : 3 % 3 types of retrieval: object/location/full
+    for iR = 1 : 4 % 4 types of retrieval: object/location/full in the 3-retrieval trials/full in the full-retrieval-only trials
         errorbar(1 : 1 : nTrans, acc_avg(:, iR), acc_sem(:, iR), 'Color', color_Grp(iR, :), 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
         plot(1 : 1 : nTrans, acc_avg(:, iR), 'Marker', '.', 'MarkerSize', 15, 'Color', color_Grp(iR, :), 'LineStyle', 'none'); hold on;
     end
@@ -3393,7 +3404,7 @@ for iGrp = 1 : nGroup %% interleaved, contentBlocked and positionBlocked
     box off;
 
     %% statistical tests for primacy and recency effects
-    for iR = 1 : 3 % 3 types of retrieval: object/location/full
+    for iR = 1 : 4 % 3 types of retrieval: object/location/full
         % ------ primacy effects ------
         [h, p, ci, stats] = ttest(accSlot_i(:, 1, iR), accSlot_i(:, 3, iR));
         primacy_recency_statMat(1, :, iR, iGrp) = [p, stats.tstat];
@@ -3404,6 +3415,76 @@ for iGrp = 1 : nGroup %% interleaved, contentBlocked and positionBlocked
     end
 end
 
+%% non-parametric way to fit the transition accuracy slot curve for each participant
+% robust quadratic fit (bisquare-weighted; no Gaussian-error assumption) of
+% acc ~ b0 + b1*slot + b2*slot^2, fit separately for each participant.
+% b1: linear (primacy/recency asymmetry) term; b2: quadratic (bow/curvature) term.
+nRetr    = 4; % object/location/full retrieval
+slotVec  = (1 : nTrans)';
+Xfit     = [slotVec, slotVec .^ 2];
+slotFitCoef_group = cell(1, nGroup); % each: subLen x 3 [intercept, linear, quadratic] x nRetr
+for iGrp = 1 : nGroup
+    accSlot_i = accSlot_group{iGrp}; % subLen x nTrans x nRetr(+1)
+    subLen_i  = size(accSlot_i, 1);
+    coefMat   = nan(subLen_i, 3, nRetr);
+    for iR = 1 : nRetr
+        for iSub = 1 : subLen_i
+            y = squeeze(accSlot_i(iSub, :, iR))';
+            if any(isnan(y))
+                continue
+            end
+            b = robustfit(Xfit, y); % [intercept; linear; quadratic]
+            coefMat(iSub, :, iR) = b';
+        end
+    end
+    slotFitCoef_group{iGrp} = coefMat;
+end
+% e.g. compare bow strength (quadratic term) between YA and OA, non-parametrically:
+% ranksum(slotFitCoef_group{1}(:,3,iR), slotFitCoef_group{2}(:,3,iR))
+
+%% Fit-quality overlay: raw group-mean accuracy curve + each participant's fitted quadratic curve
+grpNames  = {'younger', 'older'};
+retrNames = {'object', 'location', 'full-three', 'full-only'};
+xFitDense = (1 : 0.1 : nTrans)';
+XdesignDense = [ones(length(xFitDense), 1), xFitDense, xFitDense .^ 2];
+for iGrp = 1 : nGroup
+    color_Grp = nan(4, 3);
+    color_Grp(1 : 3, :) = colorGrp([iGrp, iGrp+3, iGrp+6], :);
+    color_Grp(4, :)     = [0.4, 0.4, 0.4];
+
+    accSlot_i = accSlot_group{iGrp};
+    coefMat   = slotFitCoef_group{iGrp};
+    [acc_avg, acc_sem] = Mean_and_Se(accSlot_i, 1);
+    acc_avg  = squeeze(acc_avg); % (nTrans, nRetr(+1))
+    acc_sem  = squeeze(acc_sem);
+    subLen_i = size(accSlot_i, 1);
+    figure('Position', [100 100 250 150]), clf;
+    for iR = 1 : nRetr
+        acc_fit_subj = nan(subLen_i, length(xFitDense));
+        for iSub = 1 : subLen_i
+            b = coefMat(iSub, :, iR);
+            if any(isnan(b))
+                continue
+            end
+            yFit = XdesignDense * b';
+            acc_fit_subj(iSub, :) = yFit;
+        end
+        % ------ average across the fitting curves ------
+        [fit_avg, fit_sem] = Mean_and_Se(acc_fit_subj, 1);
+        % ------ true data ------
+        errorbar(1 : 1 : nTrans, acc_avg(:, iR), acc_sem(:, iR), 'Color', color_Grp(iR, :), 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
+        plot(1 : 1 : nTrans, acc_avg(:, iR), 'Marker', '.', 'MarkerSize', 15, 'Color', color_Grp(iR, :), 'LineStyle', 'none'); hold on;
+        % ------ fitting curve ------
+        plot(xFitDense, fit_avg, 'LineStyle', '-', 'LineWidth', 0.8, 'Color', color_Grp(iR, :)); hold on;
+    end
+    xlim([0.5, nTrans + 0.5]);
+    ylim([0, 1]);
+    set(gca, 'LineWidth', 0.8);
+    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
+    set(gca, 'XTick', 1 : 1 : nTrans, 'XTickLabel', 1 : 1 : nTrans);
+    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', 0 : 0.5 : 1);
+    box off;
+end
 
 %% ****** Part 2: different curricula together ******
 %% --------Overall accuracy: superpose the different curricula within a age group--------
