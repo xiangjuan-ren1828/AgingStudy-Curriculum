@@ -44,7 +44,7 @@ yCir   = RChunk * sin(angCir) + centerY;
 
 expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
 nCond   = length(expList);
-expId   = expList{1};
+expId   = expList{3};
 if isequal(expId, 'interleaved')
     subjList_young = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
                       '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
@@ -714,7 +714,7 @@ for iMet = 1 : 3
     corrField   = [newMetrics(iMet).field, '_corr'];
     incorrField = [newMetrics(iMet).field, '_incorr'];
 
-    for iCond = 1 : 3
+    for iCond = 1 : 2%3
 
         figure('Name', [newMetrics(iMet).ftitle, ' – ', condNames{iCond}, ' collapsed'], ...
                'Color', 'w', 'Position', figPos), clf;
@@ -762,9 +762,9 @@ for iMet = 1 : 3
 
             % Individual subject dots
             scatter(ax, xC * ones(nSub_plt, 1), subCorr, ...
-                25, clr, 'filled', 'MarkerFaceAlpha', 0.4, 'HandleVisibility', 'off');
+                30, clr, 'filled', 'MarkerFaceAlpha', 0.4, 'HandleVisibility', 'off');
             scatter(ax, xI * ones(nSub_plt, 1), subIncorr, ...
-                25, clr, 'filled', 'MarkerFaceAlpha', 0.4, 'HandleVisibility', 'off');
+                30, clr, 'filled', 'MarkerFaceAlpha', 0.4, 'HandleVisibility', 'off');
 
             % Group mean ± SEM: filled = correct, open = incorrect
             errorbar(ax, xC, mC, seC, 'Color', 'k', 'LineStyle', 'none', ...
@@ -851,6 +851,10 @@ for iMet = 1 : 3
         if figKey == 0
             title(ax, [newMetrics(iMet).ftitle, ' – ', condNames{iCond}, ' (collapsed)']);
         end
+
+        figH = gcf;
+        save_name = sprintf('confidenceMetric_%s_%s.png', newMetrics(iMet).ftitle, condNames{iCond});
+        exportgraphics(figH, save_name, 'Resolution', 600);
     end
 end
 

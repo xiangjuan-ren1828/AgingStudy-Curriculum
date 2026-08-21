@@ -5,7 +5,7 @@
 % For every sequential retrieval response (content report & position
 % report, marginal-report trials only) this script tests whether a
 % trajectory-derived confidence metric — interClickTime, selSpeed,
-% dwellTime, mindChanges, timeInChosen, exactly as defined in
+% dwellTime — exactly as defined in
 % seqMemTask_Curricula_Traj_anal.m (analyzeChoiceHesitation) — correlates
 % with the Shannon entropy of the model's predicted choice-probability
 % distribution for that same response (see
@@ -17,8 +17,7 @@
 % analyzeChoiceHesitation() and the retrieval-step index "ic"/"ip" used
 % inside the model's per-trial reporting loop, so mouse_con(iRep).*(k) and
 % H_con(iT, k) refer to the same response once trial iT is mapped to the
-% matching marginal-report trial iRep (see trialIdx_con / trialIdx_loc
-% below).
+% matching marginal-report trial iRep (see trialIdx_marg below).
 %
 % Correct and incorrect responses are analyzed separately, mirroring the
 % correct/incorrect split used throughout seqMemTask_Curricula_Traj_anal.m
@@ -67,8 +66,8 @@ Midx        = 'featureCompetitionRW_update_v3';
 fitWord     = 'allLearning-marginalRep';
 bindingDirec = '';
 optimzerIdx  = 0; % fminsearchbnd (matches how the cached fits were produced)
-refit  = 0;       % 0 => load cached parameter estimates, do not refit
-nFit   = 100;
+refit = 0;       % 0 => load cached parameter estimates, do not refit
+nFit  = 100;
 
 %% ---------- image similarity matrix (needed only to reproduce the trial-encoding
 %  bookkeeping identically to how the cached fits were built; the v3 model
@@ -294,6 +293,7 @@ for iAge = 1 : nGroup
                 positionTrans = [6, 2, 5, 7, 3; ...
                                  1, 3, 8, 6, 4];
             end
+
             posList = nan(nPos, 2);
             for ip = 1 : nPos
                 ip_find = find(positionTrans(1, :) == ip);
@@ -311,7 +311,7 @@ for iAge = 1 : nGroup
 
             posStimIdx_report = cell(nEpi, 1);
             posSeq_encode     = cell(nEpi, 1);
-            angSeq_encode      = cell(nEpi, 1);
+            angSeq_encode     = cell(nEpi, 1);
             for i = 1 : nEpi
                 posX_col_i = posX_col{i};
                 posY_col_i = posY_col{i};
@@ -376,8 +376,12 @@ for iAge = 1 : nGroup
                 continue;
             end
 
-            %% ================= per-response model entropy =================
-            [H_con, H_pos, Hnorm_con, Hnorm_pos] = SeqMem_featureCompetition_update_v3_ChoiceProb( ...
+            %% ================= per-response model choice-probability predictors =================
+            % H/Hnorm: Shannon entropy of the choice-probability distribution (raw / normalized).
+            % PMax:    the model's probability for its most likely candidate at that step.
+            % PDiff:   gap between the top and 2nd-most-likely candidate's probability.
+            [H_con, H_pos, Hnorm_con, Hnorm_pos, PMax_con, PMax_pos, PDiff_con, PDiff_pos] = ...
+                SeqMem_featureCompetition_update_v3_ChoiceProb( ...
                 paramsEst, nImg, nPos, nTrans, trialLen, stim_encode, disp_con, disp_pos, disp_rec, ...
                 resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, reconsOnly, Minit, angList, angSeq_encode, ...
                 bindingDirec, imageSimilarity);
@@ -421,9 +425,8 @@ for iAge = 1 : nGroup
                             continue;
                         end
                         respRows(end+1, :) = { iAge, iCond, subUID, "Content", iT, pos, logical(isCor), ...
-                            Hval, Hnorm_con(iT, pos), ...
-                            mc.interClickTime(pos), mc.selSpeed(pos), mc.dwellTime(pos), ...
-                            mc.mindChanges(pos), mc.timeInChosen(pos) }; %#ok<SAGROW>
+                            Hval, Hnorm_con(iT, pos), PMax_con(iT, pos), PDiff_con(iT, pos), ...
+                            mc.interClickTime(pos), mc.selSpeed(pos), mc.dwellTime(pos) }; %#ok<SAGROW>
                     end
                 end
 
@@ -437,9 +440,8 @@ for iAge = 1 : nGroup
                             continue;
                         end
                         respRows(end+1, :) = { iAge, iCond, subUID, "Location", iT, pos, logical(isCor), ...
-                            Hval, Hnorm_pos(iT, pos), ...
-                            ml.interClickTime(pos), ml.selSpeed(pos), ml.dwellTime(pos), ...
-                            ml.mindChanges(pos), ml.timeInChosen(pos) }; %#ok<SAGROW>
+                            Hval, Hnorm_pos(iT, pos), PMax_pos(iT, pos), PDiff_pos(iT, pos), ...
+                            ml.interClickTime(pos), ml.selSpeed(pos), ml.dwellTime(pos) }; %#ok<SAGROW>
                     end
                 end
             end
@@ -448,7 +450,7 @@ for iAge = 1 : nGroup
 end
 
 varNames = {'AgeGrp', 'Cond', 'SubID', 'ReportType', 'TrialIdx', 'SeqPos', 'IsCorrect', ...
-            'H', 'Hnorm', 'InterClickTime', 'SelSpeed', 'DwellTime', 'MindChanges', 'TimeInChosen'};
+            'H', 'Hnorm', 'PMax', 'PDiff', 'InterClickTime', 'SelSpeed', 'DwellTime'};
 respTable = cell2table(respRows, 'VariableNames', varNames);
 respTable.AgeGrp = categorical(respTable.AgeGrp, [1, 2], grpLabels_age);
 respTable.Cond   = categorical(respTable.Cond, 1 : nCond, expList);
@@ -460,19 +462,22 @@ fprintf('\nAssembled %d responses from %d unique participants.\n', ...
 % save([CLdata_folder, 'respTable_ConfEntropy_YAOA.mat'], 'respTable');
 
 %% ==========================================================================
-%% Correlation analysis: confidence metric vs. model choice-probability entropy
+%% Correlation analysis: confidence metric vs. model choice-probability predictors
+%% (Shannon entropy H/Hnorm, best-choice probability PMax, top-2 gap PDiff)
 %% ==========================================================================
-entropyFields = {'H', 'Hnorm'};
-entropyLabels = {'Raw entropy (bits)', 'Normalized entropy'};
-metricFields  = {'InterClickTime', 'SelSpeed', 'DwellTime', 'MindChanges', 'TimeInChosen'};
-reportTypes   = {'Content', 'Location'};
+predictorFields = {'H', 'Hnorm', 'PMax', 'PDiff'};
+predictorLabels = {'Raw entropy (bits)', 'Normalized entropy', 'P(best choice)', 'P(best) - P(2nd best)'};
+metricFields   = {'InterClickTime', 'SelSpeed', 'DwellTime'};
+reportTypes    = {'Content', 'Location'};
 minRespPerSubj = 5; % minimum valid (metric, entropy) pairs required to compute a within-subject r
 
 withinRows  = {};
 betweenRows = {};
+betweenByCondRows = {}; % between-subject correlation stratified by curriculum x age group (feeds the illustrative scatter figure)
+rDetailRows = {}; % one row per (subject, combination) with a defined within-subject r, for plotting
 
-for iEnt = 1 : length(entropyFields)
-    entField = entropyFields{iEnt};
+for iEnt = 1 : length(predictorFields)
+    predField = predictorFields{iEnt};
 
     for iRT = 1 : length(reportTypes)
         rtName = reportTypes{iRT};
@@ -495,11 +500,11 @@ for iEnt = 1 : length(entropyFields)
 
                 %% ---- (2) between-participant inputs: per-subject means ----
                 metMeanSubj = nan(length(subIDs), 1);
-                entMeanSubj = nan(length(subIDs), 1);
+                predMeanSubj = nan(length(subIDs), 1);
 
                 for iS = 1 : length(subIDs)
                     subMask = rowsMask & respTable.SubID == subIDs(iS);
-                    x = respTable.(entField)(subMask);
+                    x = respTable.(predField)(subMask);
                     y = respTable.(metField)(subMask);
                     valid = ~isnan(x) & ~isnan(y);
                     nSubj(iS) = sum(valid);
@@ -512,8 +517,13 @@ for iEnt = 1 : length(entropyFields)
                         rSubj(iS) = corr(x(valid), y(valid), 'Type', 'Spearman');
                     end
                     if any(valid)
-                        entMeanSubj(iS) = mean(x(valid));
+                        predMeanSubj(iS) = mean(x(valid));
                         metMeanSubj(iS) = mean(y(valid));
+                    end
+
+                    if ~isnan(rSubj(iS))
+                        rDetailRows(end+1, :) = {string(predField), string(rtName), string(metField), ...
+                            corrLabel, subIDs(iS), ageSubj(iS), condSubj(iS), rSubj(iS)}; %#ok<SAGROW>
                     end
                 end
 
@@ -528,17 +538,17 @@ for iEnt = 1 : length(entropyFields)
                     end
                     nGood = sum(sel);
                     if nGood >= 3
-                        fz = atanh(min(max(rSubj(sel), -0.999999), 0.999999));
+                        fz = atanh(min(max(rSubj(sel), -0.999999), 0.999999)); % Fisher-z transforms each participant's r, so the values are approximately normal and poolable across subjects.
                         [~, p, ~, stats] = ttest(fz);
                         meanR = tanh(mean(fz));
                     else
                         p = NaN; meanR = NaN; stats.tstat = NaN;
                     end
-                    withinRows(end+1, :) = {entField, rtName, metField, corrLabel, ageSel, nGood, meanR, stats.tstat, p}; %#ok<SAGROW>
+                    withinRows(end+1, :) = {string(predField), string(rtName), string(metField), corrLabel, ageSel, nGood, meanR, stats.tstat, p}; %#ok<SAGROW>
                 end
 
                 % ---- between-subject summary: pooled + per age group ----
-                validBetween = ~isnan(entMeanSubj) & ~isnan(metMeanSubj);
+                validBetween = ~isnan(predMeanSubj) & ~isnan(metMeanSubj);
                 for iAgeTest = 1 : length(ageGroupsToTest)
                     ageSel = ageGroupsToTest(iAgeTest);
                     if ageSel == "All"
@@ -548,11 +558,31 @@ for iEnt = 1 : length(entropyFields)
                     end
                     nGood = sum(sel);
                     if nGood >= 3
-                        [rB, pB] = corr(entMeanSubj(sel), metMeanSubj(sel), 'Type', 'Spearman');
+                        [rB, pB] = corr(predMeanSubj(sel), metMeanSubj(sel), 'Type', 'Spearman');
                     else
                         rB = NaN; pB = NaN;
                     end
-                    betweenRows(end+1, :) = {entField, rtName, metField, corrLabel, ageSel, nGood, rB, pB}; %#ok<SAGROW>
+                    betweenRows(end+1, :) = {string(predField), string(rtName), string(metField), corrLabel, ageSel, nGood, rB, pB}; %#ok<SAGROW>
+                end
+
+                % ---- between-subject summary: per curriculum x per age group ----
+                % (finer-grained than the pooled block above; this is what the
+                % illustrative scatter figure's per-panel r/p labels draw from,
+                % so that the plotted p-values go through the same FDR correction.)
+                for iCondTest = 1 : nCond
+                    condSel = string(expList{iCondTest});
+                    for iAgeTest2 = 1 : nGroup
+                        ageSel2 = string(grpLabels_age{iAgeTest2});
+                        sel = validBetween & ageSubj == ageSel2 & condSubj == condSel;
+                        nGood = sum(sel);
+                        if nGood >= 3
+                            [rBC, pBC] = corr(predMeanSubj(sel), metMeanSubj(sel), 'Type', 'Spearman');
+                        else
+                            rBC = NaN; pBC = NaN;
+                        end
+                        betweenByCondRows(end+1, :) = {string(predField), string(rtName), string(metField), ...
+                            corrLabel, condSel, ageSel2, nGood, rBC, pBC}; %#ok<SAGROW>
+                    end
                 end
             end
         end
@@ -560,13 +590,32 @@ for iEnt = 1 : length(entropyFields)
 end
 
 withinSummary  = cell2table(withinRows, 'VariableNames', ...
-    {'EntropyType', 'ReportType', 'Metric', 'Correctness', 'AgeGrp', 'N_subj', 'MeanR_FisherZ', 'tStat', 'p'});
+    {'PredictorType', 'ReportType', 'Metric', 'Correctness', 'AgeGrp', 'N_subj', 'MeanR_FisherZ', 'tStat', 'p'});
 betweenSummary = cell2table(betweenRows, 'VariableNames', ...
-    {'EntropyType', 'ReportType', 'Metric', 'Correctness', 'AgeGrp', 'N_subj', 'R', 'p'});
+    {'PredictorType', 'ReportType', 'Metric', 'Correctness', 'AgeGrp', 'N_subj', 'R', 'p'});
+betweenByCondSummary = cell2table(betweenByCondRows, 'VariableNames', ...
+    {'PredictorType', 'ReportType', 'Metric', 'Correctness', 'Cond', 'AgeGrp', 'N_subj', 'R', 'p'});
+rDetailTable = cell2table(rDetailRows, 'VariableNames', ...
+    {'PredictorType', 'ReportType', 'Metric', 'Correctness', 'SubID', 'AgeGrp', 'Cond', 'R'});
 
-% FDR correction across all tests within each summary table (Benjamini-Hochberg)
-[~, ~, ~, withinSummary.p_fdr]  = fdr_bh(withinSummary.p, 0.05, 'pdep');
-[~, ~, ~, betweenSummary.p_fdr] = fdr_bh(betweenSummary.p, 0.05, 'pdep');
+% FDR correction across all tests within each summary table (Benjamini-Hochberg).
+% Only the tests with an actual p-value (nGood >= 3) enter the correction
+% family; feeding fdr_bh() the NaN rows too would inflate its family size m
+% and make the correction needlessly conservative for the real tests.
+withinSummary.p_fdr  = nan(height(withinSummary), 1);
+validP  = ~isnan(withinSummary.p);
+[~, ~, ~, adjP] = fdr_bh(withinSummary.p(validP), 0.05, 'pdep');
+withinSummary.p_fdr(validP) = adjP;
+
+betweenSummary.p_fdr = nan(height(betweenSummary), 1);
+validP  = ~isnan(betweenSummary.p);
+[~, ~, ~, adjP] = fdr_bh(betweenSummary.p(validP), 0.05, 'pdep');
+betweenSummary.p_fdr(validP) = adjP;
+
+betweenByCondSummary.p_fdr = nan(height(betweenByCondSummary), 1);
+validP  = ~isnan(betweenByCondSummary.p);
+[~, ~, ~, adjP] = fdr_bh(betweenByCondSummary.p(validP), 0.05, 'pdep');
+betweenByCondSummary.p_fdr(validP) = adjP;
 
 fprintf('\n=== Within-participant correlations (confidence metric vs. model entropy, per response) ===\n');
 disp(withinSummary);
@@ -574,33 +623,216 @@ disp(withinSummary);
 fprintf('\n=== Between-participant correlations (subject-averaged confidence metric vs. subject-averaged model entropy) ===\n');
 disp(betweenSummary);
 
+fprintf('\n=== Between-participant correlations, per curriculum x age group (feeds the scatter figure labels) ===\n');
+disp(betweenByCondSummary);
+
 %% ------ save summaries ------
-% save([CLdata_folder, 'ConfEntropy_corrSummary_YAOA.mat'], 'respTable', 'withinSummary', 'betweenSummary');
-
+% save([CLdata_folder, 'ConfEntropy_corrSummary_YAOA.mat'], 'respTable', 'withinSummary', 'betweenSummary', 'betweenByCondSummary');
 
 %% ==========================================================================
-%% Illustrative figure: between-participant scatter (raw entropy vs. each metric)
-%% One figure per (report type, metric); correct/incorrect side by side; YA/OA colored.
+%% plotting the within-subject correlations
 %% ==========================================================================
-grpColors = [248, 218, 172; ...     % YA
-             184, 204, 225] ./ 255; % OA
-entFieldPlot = 'H';
-figPos = [100 100 560 260];
+% Same format as the proximity-proportion figure in
+% seqMemTask_Curricula_anal_summary.m (lines 3037-3065): one x-position per
+% age group (YA and OA together), each participant's own within-subject r
+% plotted as a jittered dot, with the group mean +/- SEM overlaid as a
+% larger dot. One figure per (report type, metric); rows = correct/incorrect,
+% columns = the 3 curricula (interleaved / contentBlocked / positionBlocked),
+% so the three curricula are shown separately rather than pooled.
+
+grpColors     = [248, 218, 172; ...     % YA
+                 184, 204, 225] ./ 255; % OA
+predFieldPlot_r = 'Hnorm'; % which predictor to plot: 'H' | 'Hnorm' | 'PMax' | 'PDiff' (all available in rDetailTable)
+barPos_r      = [1; 2.5];   % one x-position per age group, as in the reference figure
+figKey        = 1;
+errLineWid    = (figKey == 0) * 3 + (figKey == 1) * 1.5;
 
 for iRT = 1 : length(reportTypes)
     rtName = reportTypes{iRT};
     for iMet = 1 : length(metricFields)
         metField = metricFields{iMet};
 
-        figure('Name', ['ConfEntropy scatter - ', rtName, ' - ', metField], ...
+        figure('Name', ['Within-subject r - ', rtName, ' - ', metField], ...
+               'Color', 'w', 'Position', [100 100 780 340]), clf;
+
+        for iCorrRow = 1 : 2
+            corrLabel_col = "Correct";
+            if iCorrRow == 2, corrLabel_col = "Incorrect"; end
+
+            for iCond = 1 : nCond
+                condName = expList{iCond};
+                panelIdx = (iCorrRow - 1) * nCond + iCond;
+                ax = subplot(2, nCond, panelIdx); hold(ax, 'on');
+
+                for iAgeP = 1 : nGroup
+                    ageSel = grpLabels_age{iAgeP};
+                    rowsMask = rDetailTable.PredictorType == predFieldPlot_r & ...
+                               rDetailTable.ReportType   == rtName & ...
+                               rDetailTable.Metric        == metField & ...
+                               rDetailTable.Correctness   == corrLabel_col & ...
+                               rDetailTable.Cond          == condName & ...
+                               rDetailTable.AgeGrp         == ageSel;
+                    dat = rDetailTable.R(rowsMask); % one within-subject r per participant
+
+                    dat_avg = nanmean(dat);
+                    dat_sem = nanstd(dat) / sqrt(sum(~isnan(dat)));
+                    bP = barPos_r(iAgeP);
+
+                    xRand_iGrp  = unifrnd(bP - 0.2, bP + 0.2, length(dat), 1);
+                    xRand_color = 0.4 * grpColors(iAgeP, :) + 0.6 * [1, 1, 1];
+                    for iSub = 1 : length(dat)
+                        plot(ax, xRand_iGrp(iSub), dat(iSub), 'Marker', 'o', 'MarkerSize', 6, ...
+                            'MarkerFaceColor', xRand_color, 'MarkerEdgeColor', 'k', ...
+                            'LineStyle', 'none', 'LineWidth', 0.6);
+                    end
+                    errorbar(ax, bP, dat_avg, dat_sem, 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid);
+                    plot(ax, bP, dat_avg, 'Marker', 'o', 'MarkerSize', 8, ...
+                        'MarkerFaceColor', grpColors(iAgeP, :), 'MarkerEdgeColor', 'k', ...
+                        'LineStyle', 'none', 'LineWidth', 0.8);
+                end
+
+                plot(ax, [0.4, 3.1], [0, 0], 'k--', 'LineWidth', 0.6); % reference: r = 0 (no correlation)
+
+                xlim(ax, [0.4, 3.1]);
+                ylim(ax, [-1, 1]);
+                set(ax, 'LineWidth', 0.8, 'FontSize', 9, 'FontWeight', 'bold', 'FontName', 'Arial');
+                set(ax, 'XTick', barPos_r', 'XTickLabel', {'YA', 'OA'});
+                if iCond == 1
+                    ylabel(ax, 'Within-subject r');
+                end
+                title(ax, [char(corrLabel_col), ' - ', condName], 'FontSize', 8);
+                box(ax, 'off');
+            end
+        end
+    end
+end
+
+%% ==========================================================================
+%% Illustrative figure: between-participant scatter (predFieldPlot vs. each metric)
+%% One figure per (report type, metric, correctness) — correct and incorrect
+%% responses are now separate figures. Columns = the 3 curricula (interleaved /
+%% contentBlocked / positionBlocked). YA and OA are shown together within each
+%% panel, but fit SEPARATELY: each age group gets its own linear regression
+%% line + labeled 95% CI band, colored to match its scatter color.
+%% ==========================================================================
+grpColors = [248, 218, 172; ...     % YA
+             184, 204, 225] ./ 255; % OA
+predFieldPlot = 'Hnorm'; % which predictor to plot: 'H' | 'Hnorm' | 'PMax' | 'PDiff'
+figPos = [100 100 900 240];
+minSubjForFit = 3; % minimum subjects (within one age group) required to fit/draw its regression line
+
+for iRT = 1 : length(reportTypes)
+    rtName = reportTypes{iRT};
+    for iMet = 1 : length(metricFields)
+        metField = metricFields{iMet};
+
+        for isCorrVal = [true, false]
+            corrLabelStr = 'Incorrect';
+            if isCorrVal, corrLabelStr = 'Correct'; end
+
+            figure('Name', ['ConfEntropy scatter - ', rtName, ' - ', metField, ' - ', corrLabelStr], ...
+                   'Color', 'w', 'Position', figPos), clf;
+
+            for iCond = 1 : nCond
+                condName = expList{iCond};
+                ax = subplot(1, nCond, iCond); hold(ax, 'on');
+
+                for iAgeP = 1 : nGroup
+                    ageSel = grpLabels_age{iAgeP};
+                    rowsMask = respTable.ReportType == rtName & respTable.IsCorrect == isCorrVal & ...
+                               respTable.AgeGrp == ageSel & respTable.Cond == condName;
+                    subIDs = unique(respTable.SubID(rowsMask));
+
+                    xPlot = nan(length(subIDs), 1);
+                    yPlot = nan(length(subIDs), 1);
+                    for iS = 1 : length(subIDs)
+                        subMask = rowsMask & respTable.SubID == subIDs(iS);
+                        xVal = respTable.(predFieldPlot)(subMask);
+                        yVal = respTable.(metField)(subMask);
+                        valid = ~isnan(xVal) & ~isnan(yVal);
+                        if any(valid)
+                            xPlot(iS) = mean(xVal(valid));
+                            yPlot(iS) = mean(yVal(valid));
+                        end
+                    end
+                    scatter(ax, xPlot, yPlot, 30, grpColors(iAgeP, :), 'filled', ...
+                        'MarkerEdgeColor', 'k', 'DisplayName', ageSel);
+
+                    % ---- per-age-group linear fit with its own labeled 95% CI band ----
+                    validFit = ~isnan(xPlot) & ~isnan(yPlot);
+                    if sum(validFit) >= minSubjForFit
+                        mdl = fitlm(xPlot(validFit), yPlot(validFit));
+
+                        xfit = linspace(min(xPlot(validFit)), max(xPlot(validFit)), 100)';
+                        [yfit, yCI] = predict(mdl, xfit);
+
+                        fitColor = grpColors(iAgeP, :) * 0.6; % darker than the scatter fill, for legibility
+                        patch(ax, [xfit; flipud(xfit)], [yCI(:, 1); flipud(yCI(:, 2))], ...
+                            grpColors(iAgeP, :), 'FaceAlpha', 0.25, 'EdgeColor', 'none', ...
+                            'DisplayName', [ageSel, ' 95% CI']);
+                        plot(ax, xfit, yfit, 'Color', fitColor, 'LineWidth', 2, ...
+                            'DisplayName', [ageSel, ' fit']);
+
+                        % Spearman r/p come from betweenByCondSummary (built above) so the
+                        % displayed p-value is the same FDR-corrected one reported in that
+                        % table, rather than a fresh uncorrected p computed just for the plot.
+                        lookupIdx = find(betweenByCondSummary.PredictorType == predFieldPlot & ...
+                                         betweenByCondSummary.ReportType   == rtName & ...
+                                         betweenByCondSummary.Metric        == metField & ...
+                                         betweenByCondSummary.Correctness   == corrLabelStr & ...
+                                         betweenByCondSummary.Cond          == condName & ...
+                                         betweenByCondSummary.AgeGrp         == ageSel, 1);
+                        rSp    = betweenByCondSummary.R(lookupIdx);
+                        pSpFDR = betweenByCondSummary.p_fdr(lookupIdx);
+
+                        yAnnot = 0.95 - 0.10 * (iAgeP - 1); % stack YA/OA annotations vertically
+                        text(ax, 0.05, yAnnot, sprintf('%s: r=%.2f, p_{FDR}=%.3f', ageSel, rSp, pSpFDR), ...
+                            'Units', 'normalized', 'FontSize', 6.5, 'VerticalAlignment', 'top', ...
+                            'Color', fitColor);
+                    end
+                end
+
+                xlabel(ax, predictorLabels{strcmp(predictorFields, predFieldPlot)});
+                ylabel(ax, metField);
+                title(ax, condName, 'FontSize', 8);
+                set(ax, 'LineWidth', 1, 'FontSize', 9, 'FontName', 'Arial', 'TickDir', 'out', 'Box', 'off');
+            end
+        end
+    end
+end
+
+%% ==========================================================================
+%% Illustrative figure: between-participant scatter, pooled across curricula
+%% (YA and OA each pool their subjects across all 3 curricula), with correct
+%% vs. incorrect responses kept as two separate panels in one figure per
+%% (report type, metric). YA and OA are fit SEPARATELY here too — same as
+%% the per-curriculum figure — each with its own labeled regression line,
+%% 95% CI band, and r/p_FDR annotation.
+%% ==========================================================================
+grpColors = [248, 218, 172; ...     % YA
+             184, 204, 225] ./ 255; % OA
+predFieldPlot = 'PDiff'; % which predictor to plot: 'H' | 'Hnorm' | 'PMax' | 'PDiff'
+figPos = [100 100 560 260];
+minSubjForFit = 3; % minimum subjects (within one age group) required to fit/draw its regression line
+
+for iRT = 1 : length(reportTypes)
+    rtName = reportTypes{iRT};
+    for iMet = 1 : length(metricFields)
+        metField = metricFields{iMet};
+
+        figure('Name', ['ConfEntropy scatter (pooled) - ', rtName, ' - ', metField], ...
                'Color', 'w', 'Position', figPos), clf;
 
         for iCorrCol = 1 : 2
             isCorrVal = (iCorrCol == 1); % col1: correct, col2: incorrect
+            corrLabelStr = 'Incorrect';
+            if isCorrVal, corrLabelStr = 'Correct'; end
+
             ax = subplot(1, 2, iCorrCol); hold(ax, 'on');
 
             for iAgeP = 1 : nGroup
                 ageSel = grpLabels_age{iAgeP};
+                % No Cond filter here: each age group is pooled across all 3 curricula.
                 rowsMask = respTable.ReportType == rtName & respTable.IsCorrect == isCorrVal & ...
                            respTable.AgeGrp == ageSel;
                 subIDs = unique(respTable.SubID(rowsMask));
@@ -609,7 +841,7 @@ for iRT = 1 : length(reportTypes)
                 yPlot = nan(length(subIDs), 1);
                 for iS = 1 : length(subIDs)
                     subMask = rowsMask & respTable.SubID == subIDs(iS);
-                    xVal = respTable.(entFieldPlot)(subMask);
+                    xVal = respTable.(predFieldPlot)(subMask);
                     yVal = respTable.(metField)(subMask);
                     valid = ~isnan(xVal) & ~isnan(yVal);
                     if any(valid)
@@ -617,23 +849,52 @@ for iRT = 1 : length(reportTypes)
                         yPlot(iS) = mean(yVal(valid));
                     end
                 end
-                scatter(ax, xPlot, yPlot, 30, grpColors(iAgeP, :), 'filled', ...
-                    'MarkerEdgeColor', 'k', 'DisplayName', ageSel);
+                scatter(ax, xPlot, yPlot, 30, grpColors(iAgeP, :), 'filled', 'MarkerEdgeColor', 'k');
+
+                % ---- per-age-group linear fit with its own labeled 95% CI band ----
+                validFit = ~isnan(xPlot) & ~isnan(yPlot);
+                if sum(validFit) >= minSubjForFit
+                    mdl = fitlm(xPlot(validFit), yPlot(validFit));
+
+                    xfit = linspace(min(xPlot(validFit)), max(xPlot(validFit)), 100)';
+                    [yfit, yCI] = predict(mdl, xfit);
+
+                    fitColor = grpColors(iAgeP, :) * 0.6; % darker than the scatter fill, for legibility
+                    patch(ax, [xfit; flipud(xfit)], [yCI(:, 1); flipud(yCI(:, 2))], ...
+                        grpColors(iAgeP, :), 'FaceAlpha', 0.25, 'EdgeColor', 'none');
+                    plot(ax, xfit, yfit, 'Color', fitColor, 'LineWidth', 2);
+
+                    % Spearman r/p come from betweenSummary (AgeGrp == ageSel), which
+                    % is already pooled across curricula for that age group, so the
+                    % displayed p-value is the same FDR-corrected one reported there.
+                    lookupIdx = find(betweenSummary.PredictorType == predFieldPlot & ...
+                                     betweenSummary.ReportType   == rtName & ...
+                                     betweenSummary.Metric        == metField & ...
+                                     betweenSummary.Correctness   == corrLabelStr & ...
+                                     betweenSummary.AgeGrp         == ageSel, 1);
+                    rSp    = betweenSummary.R(lookupIdx);
+                    pSpFDR = betweenSummary.p_fdr(lookupIdx);
+
+                    yAnnot = 0.95 - 0.10 * (iAgeP - 1); % stack YA/OA annotations vertically
+                    text(ax, 0.20, yAnnot, sprintf('%s: r=%.2f, p_{FDR}=%.3f', ageSel, rSp, pSpFDR), ...
+                        'Units', 'normalized', 'FontSize', 7, 'VerticalAlignment', 'top', ...
+                        'Color', fitColor);
+                end
             end
 
-            xlabel(ax, entropyLabels{strcmp(entropyFields, entFieldPlot)});
+            xlabel(ax, predictorLabels{strcmp(predictorFields, predFieldPlot)});
             ylabel(ax, metField);
-            titleStr = 'Correct';
-            if ~isCorrVal, titleStr = 'Incorrect'; end
-            title(ax, titleStr);
-            set(ax, 'LineWidth', 1, 'FontSize', 10, 'FontName', 'Arial', 'TickDir', 'out', 'Box', 'off');
-            if iCorrCol == 1
-                legend(ax, 'Location', 'best', 'Box', 'off');
-            end
+            title(ax, corrLabelStr);
+            set(ax, 'LineWidth', 1, 'FontSize', 9, 'FontName', 'Arial', 'TickDir', 'out', 'Box', 'off');
         end
+
+        % ---- save figure (whole figure, not just one axes, since both
+        % correct/incorrect panels live in this one figure) ----
+        figH = gcf;
+        save_name = sprintf('ConfEntropy_pooled_%s_%s.png', rtName, metField);
+        exportgraphics(figH, save_name, 'Resolution', 600);
     end
 end
-
 
 %% ------ Define the helper functions ------
 
@@ -651,63 +912,63 @@ if iAge == 1
     switch iCond
         case 1 % interleaved
             subj_list = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
-                        '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
-                        '5f15f96e54587538da27d452', '2023-08-30_15h40.43.668'; '5fd0c81fc79aef1882cbee94', '2023-08-30_16h25.12.136'; '60fecc838b1c231b1732cbb0', '2023-08-30_15h07.34.541'; ...
-                        '601f93758d79b24eabff2e44', '2023-08-30_15h11.55.950'; '602fc5844525b3d343303a2a', '2023-08-30_14h05.56.283'; '604be8ac8e0c517878fd1d9f', '2023-08-30_14h05.21.886'; ...
-                        '612ecc90331b627f7aaac5dc', '2023-08-30_16h23.19.001'; '614fca831894ddce32c1a342', '2023-08-30_15h20.32.432'; '615b5902e51bcad574d81203', '2023-08-30_15h18.25.454'; ...
-                        '6016c8e7ea3f2387ae8b47d5', '2023-08-30_16h11.53.139'; '6103c08d411c6be73d9d78a7', '2023-08-30_15h20.28.394'; '6159f6b637bab134ea9bb92e', '2023-08-30_15h13.34.934'; ...
-                        '61070b50a022d7360e46e985', '2023-08-30_16h08.26.937'; '61353c933f32fef782432cc7', '2023-08-30_15h10.45.788'; '605272be8568b6160f582f2e', '2023-08-30_14h38.14.393'; ...
-                        '6107292e60892e4246db7425', '2023-08-30_15h12.11.729'; '61685478a9bd5239a9438f66', '2023-08-30_15h12.25.867'; '614831813dc412ccc8e2f563', '2023-08-30_15h31.25.179'};
+                         '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
+                         '5f15f96e54587538da27d452', '2023-08-30_15h40.43.668'; '5fd0c81fc79aef1882cbee94', '2023-08-30_16h25.12.136'; '60fecc838b1c231b1732cbb0', '2023-08-30_15h07.34.541'; ...
+                         '601f93758d79b24eabff2e44', '2023-08-30_15h11.55.950'; '602fc5844525b3d343303a2a', '2023-08-30_14h05.56.283'; '604be8ac8e0c517878fd1d9f', '2023-08-30_14h05.21.886'; ...
+                         '612ecc90331b627f7aaac5dc', '2023-08-30_16h23.19.001'; '614fca831894ddce32c1a342', '2023-08-30_15h20.32.432'; '615b5902e51bcad574d81203', '2023-08-30_15h18.25.454'; ...
+                         '6016c8e7ea3f2387ae8b47d5', '2023-08-30_16h11.53.139'; '6103c08d411c6be73d9d78a7', '2023-08-30_15h20.28.394'; '6159f6b637bab134ea9bb92e', '2023-08-30_15h13.34.934'; ...
+                         '61070b50a022d7360e46e985', '2023-08-30_16h08.26.937'; '61353c933f32fef782432cc7', '2023-08-30_15h10.45.788'; '605272be8568b6160f582f2e', '2023-08-30_14h38.14.393'; ...
+                         '6107292e60892e4246db7425', '2023-08-30_15h12.11.729'; '61685478a9bd5239a9438f66', '2023-08-30_15h12.25.867'; '614831813dc412ccc8e2f563', '2023-08-30_15h31.25.179'};
         case 2 % contentBlocked
             subj_list = {'5a6e4ecae6cc4a0001b6d38d', '2023-08-30_14h14.47.654'; '5bcdb05e1bfcbf0001d77240', '2023-08-30_15h43.03.664'; '5eceef5fa487421604c337ba', '2023-08-30_19h06.46.141'; ...
-                        '5f1f1a1f443fd90bf5e2e716', '2023-08-30_15h12.16.243'; '5f4fd62570b0df0f71a35d98', '2023-08-30_16h34.02.959'; '5f5f6e9b003b2a0217bba847', '2023-08-30_16h33.19.240'; ...
-                        '5f8825d4938a85280f506a83', '2023-08-30_14h12.31.867'; '60db9c9850c39eea109ef1d3', '2023-08-30_15h14.10.340'; '60f31ca80f6c233558e5a354', '2023-08-30_15h14.19.785'; ...
-                        '603e2530ab9d37d734fa6ca9', '2023-08-30_15h20.00.625'; '610a5f883d6841e65838f97d', '2023-08-30_15h20.15.081'; '611d604624f673b1e62275c5', '2023-08-30_15h14.05.541'; ...
-                        '612cf0efe0be33cea5c5a123', '2023-08-30_15h13.46.115'; '615cc500aab10659f82a02ab', '2023-08-30_15h20.16.812'; '616fd6aac8d209bdcd631c2a', '2023-08-30_15h15.09.944'; ...
-                        '6106e9f1880fb0b44c319ced', '2023-08-30_14h13.50.009'; '6130e97d4106299f8c6120fa', '2023-08-30_15h13.59.129'; '6151e74c66fb9fb95b2f522e', '2023-08-30_15h17.08.514'; ...
-                        '6159bec91e6d099cb2b032fc', '2023-08-30_15h14.49.228'; '60561bed5ea5ad8dbe3fae07', '2023-08-30_14h38.38.277'; '61698b3f8623f619b602b00b', '2023-08-30_15h07.19.062'; ...
-                        '610063b7b50c4e9488e77eca', '2023-08-30_15h16.38.986'; '617091df73f7dd1c8448b3f4', '2023-08-30_15h14.45.308'; '615024818c0798f950215d49', '2023-08-30_15h13.03.877'};
+                         '5f1f1a1f443fd90bf5e2e716', '2023-08-30_15h12.16.243'; '5f4fd62570b0df0f71a35d98', '2023-08-30_16h34.02.959'; '5f5f6e9b003b2a0217bba847', '2023-08-30_16h33.19.240'; ...
+                         '5f8825d4938a85280f506a83', '2023-08-30_14h12.31.867'; '60db9c9850c39eea109ef1d3', '2023-08-30_15h14.10.340'; '60f31ca80f6c233558e5a354', '2023-08-30_15h14.19.785'; ...
+                         '603e2530ab9d37d734fa6ca9', '2023-08-30_15h20.00.625'; '610a5f883d6841e65838f97d', '2023-08-30_15h20.15.081'; '611d604624f673b1e62275c5', '2023-08-30_15h14.05.541'; ...
+                         '612cf0efe0be33cea5c5a123', '2023-08-30_15h13.46.115'; '615cc500aab10659f82a02ab', '2023-08-30_15h20.16.812'; '616fd6aac8d209bdcd631c2a', '2023-08-30_15h15.09.944'; ...
+                         '6106e9f1880fb0b44c319ced', '2023-08-30_14h13.50.009'; '6130e97d4106299f8c6120fa', '2023-08-30_15h13.59.129'; '6151e74c66fb9fb95b2f522e', '2023-08-30_15h17.08.514'; ...
+                         '6159bec91e6d099cb2b032fc', '2023-08-30_15h14.49.228'; '60561bed5ea5ad8dbe3fae07', '2023-08-30_14h38.38.277'; '61698b3f8623f619b602b00b', '2023-08-30_15h07.19.062'; ...
+                         '610063b7b50c4e9488e77eca', '2023-08-30_15h16.38.986'; '617091df73f7dd1c8448b3f4', '2023-08-30_15h14.45.308'; '615024818c0798f950215d49', '2023-08-30_15h13.03.877'};
         case 3 % positionBlocked
             subj_list = {'5eac7f2a11f5972d923bcd8e', '2023-08-30_15h14.56.423'; '5ecfdd84dc64e1061b97e321', '2023-08-30_15h16.52.236'; '5f82fd997dab234303560326', '2023-08-30_16h05.14.338'; ...
-                        '60aadeb9e6e8147089f7eced', '2023-08-30_15h10.48.242'; '60cca032f398af85575618e3', '2023-08-30_15h14.23.924'; '60d333a37d135f2ee2592457', '2023-08-30_14h06.57.777'; ...
-                        '60f5db51ea1f75902fc20970', '2023-08-30_14h26.24.581'; '60f6a19c247160dce8d5a69c', '2023-08-30_17h45.57.432'; '60fb0d1ef1ea8d2bcb8166dd', '2023-08-30_16h02.38.876'; ...
-                        '64c12183ab9cf635c69df81b', '2023-08-30_15h10.11.992'; '603e5d265ed1c2e3ea13ebad', '2023-08-30_15h12.42.164'; '611b87ab5cc971129768ead2', '2023-08-30_15h16.28.053'; ...
-                        '611d06c0bcc92ba3d7669ef6', '2023-08-30_15h20.29.244'; '611e60a6a1fd59a57341b862', '2023-08-30_15h18.11.988'; '60940b7855b3a885f925856b', '2023-08-30_14h06.05.080'; ...
-                        '61544c72236c88d054490ea6', '2023-08-30_15h06.40.921'; '64736ec17f1a9b745c8fad92', '2023-08-30_14h24.33.592'; '613615da1eacf6204ce33479', '2023-08-30_14h05.15.755'; ...
-                        '64526929d8f9b780b29d4d8d', '2023-08-30_16h31.49.928'; '6175733727b1e3ce2d72dbe4', '2023-08-30_15h24.49.630'; '61412724735027d42bf53011', '2023-08-30_15h12.53.447'};
+                         '60aadeb9e6e8147089f7eced', '2023-08-30_15h10.48.242'; '60cca032f398af85575618e3', '2023-08-30_15h14.23.924'; '60d333a37d135f2ee2592457', '2023-08-30_14h06.57.777'; ...
+                         '60f5db51ea1f75902fc20970', '2023-08-30_14h26.24.581'; '60f6a19c247160dce8d5a69c', '2023-08-30_17h45.57.432'; '60fb0d1ef1ea8d2bcb8166dd', '2023-08-30_16h02.38.876'; ...
+                         '64c12183ab9cf635c69df81b', '2023-08-30_15h10.11.992'; '603e5d265ed1c2e3ea13ebad', '2023-08-30_15h12.42.164'; '611b87ab5cc971129768ead2', '2023-08-30_15h16.28.053'; ...
+                         '611d06c0bcc92ba3d7669ef6', '2023-08-30_15h20.29.244'; '611e60a6a1fd59a57341b862', '2023-08-30_15h18.11.988'; '60940b7855b3a885f925856b', '2023-08-30_14h06.05.080'; ...
+                         '61544c72236c88d054490ea6', '2023-08-30_15h06.40.921'; '64736ec17f1a9b745c8fad92', '2023-08-30_14h24.33.592'; '613615da1eacf6204ce33479', '2023-08-30_14h05.15.755'; ...
+                         '64526929d8f9b780b29d4d8d', '2023-08-30_16h31.49.928'; '6175733727b1e3ce2d72dbe4', '2023-08-30_15h24.49.630'; '61412724735027d42bf53011', '2023-08-30_15h12.53.447'};
     end
 else
     groupName = 'older';
     switch iCond
         case 1 % interleaved
             subj_list = {'5abb8dcb7ccedb0001b7f0d7', '2023-05-23_15h56.51.831'; '5be064114c6bd000013368f3', '2023-05-22_18h00.20.474'; '5c5df0475b87820001c4f21c', '2023-05-23_16h15.47.308'; ...
-                        '5e9f0bc126557006ea49d1f4', '2023-05-23_16h58.16.506'; '5ea20fd571038c119083a8df', '2023-05-23_15h56.44.482'; '63b2d04ed0f53f75de4ba38e', '2023-05-23_16h30.06.501'; ...
-                        '609a503448860549084c43ce', '2023-05-22_17h13.56.435'; '60534c39d754d351333bdd7c', '2023-05-23_16h15.50.361'; '597519f8262c480001bbaf8b', '2023-05-23_17h49.49.000'; ...
-                        '61539b3fa541b182c0fadde1', '2023-05-26_11h37.17.532'; '574ce0a57fd0ec000db73aa6', '2023-05-26_12h33.38.572'; '55900dcffdf99b3f7aada3f5', '2023-05-26_10h08.56.439'; ...
-                        '55e9aa1c735c45001043fbb6', '2023-05-26_17h56.53.674'; '64456ad3d3e7651a1dad232c', '2023-05-26_11h53.36.716'; '62aa26dd93252c8d69f7fc45', '2023-05-26_17h51.56.081'; ...
-                        '5f53b958c8cfea6e2104c5b6', '2023-05-26_17h23.34.078'; '5f48e3d7f998433ac6356ad4', '2023-05-26_11h52.29.081'; '62f0f033178f89dd6f416590', '2023-05-26_17h21.29.494'; ...
-                        '5c79a584670f87001646cef6', '2023-05-26_17h42.42.514'; '630be3605287a0f49b87c709', '2023-05-26_16h37.54.676'; '6121190671d1042b24d8d67b', '2023-05-26_16h16.28.267'; ...
-                        '5c4cdcb14cb4630001ec4955', '2023-05-26_16h17.13.674'; '5f6e83419dd5cb3c85325fc6', '05-26-2023_16h37.34.939'};
+                         '5e9f0bc126557006ea49d1f4', '2023-05-23_16h58.16.506'; '5ea20fd571038c119083a8df', '2023-05-23_15h56.44.482'; '63b2d04ed0f53f75de4ba38e', '2023-05-23_16h30.06.501'; ...
+                         '609a503448860549084c43ce', '2023-05-22_17h13.56.435'; '60534c39d754d351333bdd7c', '2023-05-23_16h15.50.361'; '597519f8262c480001bbaf8b', '2023-05-23_17h49.49.000'; ...
+                         '61539b3fa541b182c0fadde1', '2023-05-26_11h37.17.532'; '574ce0a57fd0ec000db73aa6', '2023-05-26_12h33.38.572'; '55900dcffdf99b3f7aada3f5', '2023-05-26_10h08.56.439'; ...
+                         '55e9aa1c735c45001043fbb6', '2023-05-26_17h56.53.674'; '64456ad3d3e7651a1dad232c', '2023-05-26_11h53.36.716'; '62aa26dd93252c8d69f7fc45', '2023-05-26_17h51.56.081'; ...
+                         '5f53b958c8cfea6e2104c5b6', '2023-05-26_17h23.34.078'; '5f48e3d7f998433ac6356ad4', '2023-05-26_11h52.29.081'; '62f0f033178f89dd6f416590', '2023-05-26_17h21.29.494'; ...
+                         '5c79a584670f87001646cef6', '2023-05-26_17h42.42.514'; '630be3605287a0f49b87c709', '2023-05-26_16h37.54.676'; '6121190671d1042b24d8d67b', '2023-05-26_16h16.28.267'; ...
+                         '5c4cdcb14cb4630001ec4955', '2023-05-26_16h17.13.674'; '5f6e83419dd5cb3c85325fc6', '05-26-2023_16h37.34.939'};
         case 2 % contentBlocked
             subj_list = {'5c964575c7f75b000167754e', '2023-05-23_16h14.31.968'; '5dfb7cbd01423f8a774d893b', '2023-05-23_18h31.24.688'; '5e8f569436e20a234f89a6f4', '2023-05-23_16h13.25.490'; ...
-                        '5ea0b2cbf710490ac2644b7e', '2023-05-23_16h20.30.392'; '5ea3319a6a1a5b2a1175ed6e', '2023-05-23_16h15.41.365'; '5ea159434ac916016387488e', '2023-05-23_15h58.15.599'; ...
-                        '58e79d86fe9c8c0001c77ced', '2023-05-23_16h11.20.170'; '574da26c7f1e770007f42d11', '2023-05-23_16h16.02.150'; '614c5dc3cda534db7afc2e73', '2023-05-23_16h09.12.297'; ...
-                        '614f874e5b46971822dfa61a', '2023-05-23_18h55.58.563'; '6161bdbff67e4b4621b530e7', '2023-05-23_17h11.58.970'; '59eb2cc98c371000010bb196', '2023-05-26_18h01.10.451'; ...
-                        '5e86c11942701c2ffda5d113', '2023-05-26_11h48.52.812'; '6086c333d6eb73cfdd564e90', '2023-05-26_17h01.07.280'; '5eb2695f1745801c7c919e35', '2023-05-26_16h36.21.594'; ...
-                        '5af32f9d003f6c0001f2905b', '2023-05-26_16h27.35.772'; '61703be3748d6f5ddc01170a', '2023-05-26_17h11.26.871'; '610c67785d74ee2c4a39def8', '2023-05-26_16h24.47.208'; ...
-                        '5c8ee6c36ca70b0001fe979d', '2023-05-26_11h13.31.213'; '63beebaa4c5884797ff00a98', '2023-05-26_16h33.19.754'; '62162ab683fc823e78c025e5', '2023-05-26_16h09.16.187'; ...
-                        '5ab14bdeb0ca80000197e6b6', '2023-05-26_16h15.01.130'; '6452058d0baefbe199f321e0', '2023-05-26_15h56.07.802'; '5e510d0760dd0913e45370dc', '2023-05-26_15h56.04.808'; ...
-                        '5c081c45fd9c080001709937', '2023-05-26_15h51.35.355'};
+                         '5ea0b2cbf710490ac2644b7e', '2023-05-23_16h20.30.392'; '5ea3319a6a1a5b2a1175ed6e', '2023-05-23_16h15.41.365'; '5ea159434ac916016387488e', '2023-05-23_15h58.15.599'; ...
+                         '58e79d86fe9c8c0001c77ced', '2023-05-23_16h11.20.170'; '574da26c7f1e770007f42d11', '2023-05-23_16h16.02.150'; '614c5dc3cda534db7afc2e73', '2023-05-23_16h09.12.297'; ...
+                         '614f874e5b46971822dfa61a', '2023-05-23_18h55.58.563'; '6161bdbff67e4b4621b530e7', '2023-05-23_17h11.58.970'; '59eb2cc98c371000010bb196', '2023-05-26_18h01.10.451'; ...
+                         '5e86c11942701c2ffda5d113', '2023-05-26_11h48.52.812'; '6086c333d6eb73cfdd564e90', '2023-05-26_17h01.07.280'; '5eb2695f1745801c7c919e35', '2023-05-26_16h36.21.594'; ...
+                         '5af32f9d003f6c0001f2905b', '2023-05-26_16h27.35.772'; '61703be3748d6f5ddc01170a', '2023-05-26_17h11.26.871'; '610c67785d74ee2c4a39def8', '2023-05-26_16h24.47.208'; ...
+                         '5c8ee6c36ca70b0001fe979d', '2023-05-26_11h13.31.213'; '63beebaa4c5884797ff00a98', '2023-05-26_16h33.19.754'; '62162ab683fc823e78c025e5', '2023-05-26_16h09.16.187'; ...
+                         '5ab14bdeb0ca80000197e6b6', '2023-05-26_16h15.01.130'; '6452058d0baefbe199f321e0', '2023-05-26_15h56.07.802'; '5e510d0760dd0913e45370dc', '2023-05-26_15h56.04.808'; ...
+                         '5c081c45fd9c080001709937', '2023-05-26_15h51.35.355'};
         case 3 % positionBlocked
             subj_list = {'5a9e9fc46219a30001f54994', '2023-05-23_17h08.22.534'; '5ab8d182e1546900019b7195', '2023-05-23_16h22.50.058'; '5b017ef1293d310001023bd8', '2023-05-23_16h11.23.900'; ...
-                        '5d812e3c613aa900188746a6', '2023-05-23_16h31.34.361'; '60ce6af707bcd42cbc885210', '2023-05-23_16h30.17.733'; '60f34fcae3c49524b0903a5d', '2023-05-23_16h19.52.799'; ...
-                        '60f728553a37102574b585c4', '2023-05-23_11h34.06.217'; '612cc22830e71399b7a86841', '2023-05-23_16h23.00.515'; '6130a32cd30a251765045601', '2023-05-23_16h57.41.603'; ...
-                        '64457bc906c125cebd4bf66b', '2023-05-23_16h49.30.176'; '608e2cb9067eb028500433d5', '2023-05-26_12h31.32.235'; '60c119b30aa5205b493541b6', '2023-05-26_14h42.15.132'; ...
-                        '64071f8576c48034c00df845', '2023-05-27_01h35.27.844'; '5b33a01fa8327d0001003821', '2023-05-26_13h12.16.403'; '5f9ec66a5a97fa0748bc61a3', '2023-05-26_12h09.26.191'; ...
-                        '6148c0a6e2353cbbac1cd506', '2023-05-26_10h08.10.469'; '597e0aa515837000016ae8db', '2023-05-26_17h13.06.495'; '5e9027110aacc7320bd9a84b', '2023-05-26_17h49.02.839'; ...
-                        '5b4e50fb369f840001136070', '2023-05-26_17h21.53.119'; '558bb476fdf99b21155f2dbf', '2023-05-26_17h05.08.565'; '5e54367e80cd0944205b27f9', '2023-05-26_17h00.55.134'; ...
-                        '57dc590ddcda780001a0e157', '2023-05-26_17h35.13.259'; '612fa816410c4ea2f08fe22c', '2023-05-26_17h21.19.703'; '5c28b31a0091e40001ca5030', '2023-05-26_17h05.03.096'; ...
-                        '5be92cf1ba2782000117743e', '2023-05-26_17h00.40.846'};
+                         '5d812e3c613aa900188746a6', '2023-05-23_16h31.34.361'; '60ce6af707bcd42cbc885210', '2023-05-23_16h30.17.733'; '60f34fcae3c49524b0903a5d', '2023-05-23_16h19.52.799'; ...
+                         '60f728553a37102574b585c4', '2023-05-23_11h34.06.217'; '612cc22830e71399b7a86841', '2023-05-23_16h23.00.515'; '6130a32cd30a251765045601', '2023-05-23_16h57.41.603'; ...
+                         '64457bc906c125cebd4bf66b', '2023-05-23_16h49.30.176'; '608e2cb9067eb028500433d5', '2023-05-26_12h31.32.235'; '60c119b30aa5205b493541b6', '2023-05-26_14h42.15.132'; ...
+                         '64071f8576c48034c00df845', '2023-05-27_01h35.27.844'; '5b33a01fa8327d0001003821', '2023-05-26_13h12.16.403'; '5f9ec66a5a97fa0748bc61a3', '2023-05-26_12h09.26.191'; ...
+                         '6148c0a6e2353cbbac1cd506', '2023-05-26_10h08.10.469'; '597e0aa515837000016ae8db', '2023-05-26_17h13.06.495'; '5e9027110aacc7320bd9a84b', '2023-05-26_17h49.02.839'; ...
+                         '5b4e50fb369f840001136070', '2023-05-26_17h21.53.119'; '558bb476fdf99b21155f2dbf', '2023-05-26_17h05.08.565'; '5e54367e80cd0944205b27f9', '2023-05-26_17h00.55.134'; ...
+                         '57dc590ddcda780001a0e157', '2023-05-26_17h35.13.259'; '612fa816410c4ea2f08fe22c', '2023-05-26_17h21.19.703'; '5c28b31a0091e40001ca5030', '2023-05-26_17h05.03.096'; ...
+                         '5be92cf1ba2782000117743e', '2023-05-26_17h00.40.846'};
     end
 end
 end
