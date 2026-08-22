@@ -68,6 +68,8 @@ bindingDirec = '';
 optimzerIdx  = 0; % fminsearchbnd (matches how the cached fits were produced)
 refit = 0;       % 0 => load cached parameter estimates, do not refit
 nFit  = 100;
+nSim  = 100;     % number of self-generated retrieval sequences averaged by
+                 % SeqMem_featureCompetition_update_v3_ChoiceProbSim.m
 
 %% ---------- image similarity matrix (needed only to reproduce the trial-encoding
 %  bookkeeping identically to how the cached fits were built; the v3 model
@@ -386,6 +388,17 @@ for iAge = 1 : nGroup
                 resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, reconsOnly, Minit, angList, angSeq_encode, ...
                 bindingDirec, imageSimilarity);
 
+            % "Self-generated" counterpart: the model draws its own retrieval
+            % sequence (mnrnd on pCorr) at every step instead of having the
+            % candidate pool shrink around the participant's real clicks, so
+            % these predictors are independent of the participant's actual
+            % response sequence (averaged over nSim simulated sequences).
+            [H_con_sim, H_pos_sim, Hnorm_con_sim, Hnorm_pos_sim, PMax_con_sim, PMax_pos_sim, PDiff_con_sim, PDiff_pos_sim] = ...
+                SeqMem_featureCompetition_update_v3_ChoiceProbSim( ...
+                paramsEst, nImg, nPos, nTrans, trialLen, stim_encode, disp_con, disp_pos, disp_rec, ...
+                resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, nSim, reconsOnly, Minit, angList, angSeq_encode, ...
+                bindingDirec, imageSimilarity);
+
             %% ================= trajectory-derived confidence metrics =================
             mouse_con = extractMouseClosestToReport(seqMem_subj_traj, 'mouseX',    'mouseY',    'mouseT',    'conReportTrue');
             mouse_loc = extractMouseClosestToReport(seqMem_subj_traj, 'mouseXloc', 'mouseYloc', 'mouseTloc', 'locReportTrue');
@@ -426,6 +439,7 @@ for iAge = 1 : nGroup
                         end
                         respRows(end+1, :) = { iAge, iCond, subUID, "Content", iT, pos, logical(isCor), ...
                             Hval, Hnorm_con(iT, pos), PMax_con(iT, pos), PDiff_con(iT, pos), ...
+                            H_con_sim(iT, pos), Hnorm_con_sim(iT, pos), PMax_con_sim(iT, pos), PDiff_con_sim(iT, pos), ...
                             mc.interClickTime(pos), mc.selSpeed(pos), mc.dwellTime(pos) }; %#ok<SAGROW>
                     end
                 end
@@ -441,6 +455,7 @@ for iAge = 1 : nGroup
                         end
                         respRows(end+1, :) = { iAge, iCond, subUID, "Location", iT, pos, logical(isCor), ...
                             Hval, Hnorm_pos(iT, pos), PMax_pos(iT, pos), PDiff_pos(iT, pos), ...
+                            H_pos_sim(iT, pos), Hnorm_pos_sim(iT, pos), PMax_pos_sim(iT, pos), PDiff_pos_sim(iT, pos), ...
                             ml.interClickTime(pos), ml.selSpeed(pos), ml.dwellTime(pos) }; %#ok<SAGROW>
                     end
                 end
@@ -450,7 +465,9 @@ for iAge = 1 : nGroup
 end
 
 varNames = {'AgeGrp', 'Cond', 'SubID', 'ReportType', 'TrialIdx', 'SeqPos', 'IsCorrect', ...
-            'H', 'Hnorm', 'PMax', 'PDiff', 'InterClickTime', 'SelSpeed', 'DwellTime'};
+            'H', 'Hnorm', 'PMax', 'PDiff', ...
+            'H_Sim', 'Hnorm_Sim', 'PMax_Sim', 'PDiff_Sim', ...
+            'InterClickTime', 'SelSpeed', 'DwellTime'};
 respTable = cell2table(respRows, 'VariableNames', varNames);
 respTable.AgeGrp = categorical(respTable.AgeGrp, [1, 2], grpLabels_age);
 respTable.Cond   = categorical(respTable.Cond, 1 : nCond, expList);
@@ -465,8 +482,15 @@ fprintf('\nAssembled %d responses from %d unique participants.\n', ...
 %% Correlation analysis: confidence metric vs. model choice-probability predictors
 %% (Shannon entropy H/Hnorm, best-choice probability PMax, top-2 gap PDiff)
 %% ==========================================================================
-predictorFields = {'H', 'Hnorm', 'PMax', 'PDiff'};
-predictorLabels = {'Raw entropy (bits)', 'Normalized entropy', 'P(best choice)', 'P(best) - P(2nd best)'};
+% *_Sim variants are computed by SeqMem_featureCompetition_update_v3_ChoiceProbSim.m:
+% the model draws its own retrieval sequence (never the participant's real
+% response) to shrink the candidate pool at each step, so these are
+% independent of what the participant actually chose (see that function's
+% header for the full rationale).
+predictorFields = {'H', 'Hnorm', 'PMax', 'PDiff', 'H_Sim', 'Hnorm_Sim', 'PMax_Sim', 'PDiff_Sim'};
+predictorLabels = {'Raw entropy (bits)', 'Normalized entropy', 'P(best choice)', 'P(best) - P(2nd best)', ...
+                    'Raw entropy, self-generated (bits)', 'Normalized entropy, self-generated', ...
+                    'P(best choice), self-generated', 'P(best) - P(2nd best), self-generated'};
 metricFields   = {'InterClickTime', 'SelSpeed', 'DwellTime'};
 reportTypes    = {'Content', 'Location'};
 minRespPerSubj = 5; % minimum valid (metric, entropy) pairs required to compute a within-subject r
@@ -628,6 +652,12 @@ disp(betweenByCondSummary);
 
 %% ------ save summaries ------
 % save([CLdata_folder, 'ConfEntropy_corrSummary_YAOA.mat'], 'respTable', 'withinSummary', 'betweenSummary', 'betweenByCondSummary');
+
+
+%% ------ There should be one figure to quantify the relationship among shannon entropy, P(best), and P(best)-P(2nd best) ------
+% Are they correlated?
+
+
 
 %% ==========================================================================
 %% plotting the within-subject correlations
