@@ -62,14 +62,20 @@ grpNames = {'younger', 'older'};
 grpLabels_age = {'YA', 'OA'};
 
 %% ---------- model settings (must match the cached fits from seqMemTask_modelPred_main.m) ----------
-Midx        = 'featureCompetitionRW_update_v3';
+Midx        = 'featureCompetitionRW_update_v5'; % 'featureCompetitionRW_update_v3' or 'featureCompetitionRW_update_v5'
 fitWord     = 'allLearning-marginalRep';
 bindingDirec = '';
-optimzerIdx  = 0; % fminsearchbnd (matches how the cached fits were produced)
+if isequal(Midx, 'featureCompetitionRW_update_v5')
+    optimzerIdx = 2; % fmincon (matches how the v5 cached fits were produced)
+elseif isequal(Midx, 'featureCompetitionRW_update_v3')
+    optimzerIdx = 0; % fminsearchbnd (matches how the v3 cached fits were produced)
+else
+    error('Unrecognized Midx "%s" -- only featureCompetitionRW_update_v3/v5 are wired up in this script.', Midx);
+end
 refit = 0;       % 0 => load cached parameter estimates, do not refit
 nFit  = 100;
 nSim  = 100;     % number of self-generated retrieval sequences averaged by
-                 % SeqMem_featureCompetition_update_v3_ChoiceProbSim.m
+                 % SeqMem_featureCompetition_update_v3_ChoiceProbSim.m / update_v5_ChoiceProbSim.m
 
 %% ---------- image similarity matrix (needed only to reproduce the trial-encoding
 %  bookkeeping identically to how the cached fits were built; the v3 model
@@ -361,7 +367,11 @@ for iAge = 1 : nGroup
             % the cache file already exists) — this script must only ever
             % read cached parameter estimates, never fit.
             subID = ['sub', num2str(iSub)];
-            fnDir_check = [folder, '/ModelFitting_Results/', groupName, '/', suffixWord, '/', Midx, '-ModelFits-', fitWord, '/'];
+            if optimzerIdx == 2
+                fnDir_check = [folder, '/ModelFitting_FminconResults/', groupName, '/', suffixWord, '/', Midx, '-ModelFits-', fitWord, '/'];
+            else
+                fnDir_check = [folder, '/ModelFitting_Results/', groupName, '/', suffixWord, '/', Midx, '-ModelFits-', fitWord, '/'];
+            end
             fn_check    = [fnDir_check, groupName, '-', suffixWord, '-', subID, '-rep', num2str(nFit), '.mat'];
             if ~exist(fn_check, 'file')
                 warning('No cached fit found for %s-%s-%s (expected %s); skipping subject.', ...
@@ -382,22 +392,38 @@ for iAge = 1 : nGroup
             % H/Hnorm: Shannon entropy of the choice-probability distribution (raw / normalized).
             % PMax:    the model's probability for its most likely candidate at that step.
             % PDiff:   gap between the top and 2nd-most-likely candidate's probability.
-            [H_con, H_pos, Hnorm_con, Hnorm_pos, PMax_con, PMax_pos, PDiff_con, PDiff_pos] = ...
-                SeqMem_featureCompetition_update_v3_ChoiceProb( ...
-                paramsEst, nImg, nPos, nTrans, trialLen, stim_encode, disp_con, disp_pos, disp_rec, ...
-                resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, reconsOnly, Minit, angList, angSeq_encode, ...
-                bindingDirec, imageSimilarity);
+            if isequal(Midx, 'featureCompetitionRW_update_v5')
+                [H_con, H_pos, Hnorm_con, Hnorm_pos, PMax_con, PMax_pos, PDiff_con, PDiff_pos] = ...
+                    SeqMem_featureCompetition_update_v5_ChoiceProb( ...
+                    paramsEst, nImg, nPos, nTrans, trialLen, stim_encode, disp_con, disp_pos, disp_rec, ...
+                    resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, reconsOnly, Minit, angList, angSeq_encode, ...
+                    bindingDirec, imageSimilarity);
+            elseif isequal(Midx, 'featureCompetitionRW_update_v3')
+                [H_con, H_pos, Hnorm_con, Hnorm_pos, PMax_con, PMax_pos, PDiff_con, PDiff_pos] = ...
+                    SeqMem_featureCompetition_update_v3_ChoiceProb( ...
+                    paramsEst, nImg, nPos, nTrans, trialLen, stim_encode, disp_con, disp_pos, disp_rec, ...
+                    resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, reconsOnly, Minit, angList, angSeq_encode, ...
+                    bindingDirec, imageSimilarity);
+            end
 
             % "Self-generated" counterpart: the model draws its own retrieval
             % sequence (mnrnd on pCorr) at every step instead of having the
             % candidate pool shrink around the participant's real clicks, so
             % these predictors are independent of the participant's actual
             % response sequence (averaged over nSim simulated sequences).
-            [H_con_sim, H_pos_sim, Hnorm_con_sim, Hnorm_pos_sim, PMax_con_sim, PMax_pos_sim, PDiff_con_sim, PDiff_pos_sim] = ...
-                SeqMem_featureCompetition_update_v3_ChoiceProbSim( ...
-                paramsEst, nImg, nPos, nTrans, trialLen, stim_encode, disp_con, disp_pos, disp_rec, ...
-                resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, nSim, reconsOnly, Minit, angList, angSeq_encode, ...
-                bindingDirec, imageSimilarity);
+            if isequal(Midx, 'featureCompetitionRW_update_v5')
+                [H_con_sim, H_pos_sim, Hnorm_con_sim, Hnorm_pos_sim, PMax_con_sim, PMax_pos_sim, PDiff_con_sim, PDiff_pos_sim] = ...
+                    SeqMem_featureCompetition_update_v5_ChoiceProbSim( ...
+                    paramsEst, nImg, nPos, nTrans, trialLen, stim_encode, disp_con, disp_pos, disp_rec, ...
+                    resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, nSim, reconsOnly, Minit, angList, angSeq_encode, ...
+                    bindingDirec, imageSimilarity);
+            elseif isequal(Midx, 'featureCompetitionRW_update_v3')
+                [H_con_sim, H_pos_sim, Hnorm_con_sim, Hnorm_pos_sim, PMax_con_sim, PMax_pos_sim, PDiff_con_sim, PDiff_pos_sim] = ...
+                    SeqMem_featureCompetition_update_v3_ChoiceProbSim( ...
+                    paramsEst, nImg, nPos, nTrans, trialLen, stim_encode, disp_con, disp_pos, disp_rec, ...
+                    resp_con, resp_pos, resp_rec, context_arr, testOrd_arr, nSim, reconsOnly, Minit, angList, angSeq_encode, ...
+                    bindingDirec, imageSimilarity);
+            end
 
             %% ================= trajectory-derived confidence metrics =================
             mouse_con = extractMouseClosestToReport(seqMem_subj_traj, 'mouseX',    'mouseY',    'mouseT',    'conReportTrue');
@@ -747,7 +773,7 @@ end
 %% ==========================================================================
 grpColors = [248, 218, 172; ...     % YA
              184, 204, 225] ./ 255; % OA
-predFieldPlot = 'Hnorm'; % which predictor to plot: 'H' | 'Hnorm' | 'PMax' | 'PDiff'
+predFieldPlot = 'Hnorm'; % which predictor to plot: 'H' | 'Hnorm' | 'PMax' | 'PDiff' | 'H_sim' | 'Hnorm_Sim' | 'PMax_Sim' | 'PDiff_Sim'
 figPos = [100 100 900 240];
 minSubjForFit = 3; % minimum subjects (within one age group) required to fit/draw its regression line
 
@@ -841,7 +867,7 @@ end
 %% ==========================================================================
 grpColors = [248, 218, 172; ...     % YA
              184, 204, 225] ./ 255; % OA
-predFieldPlot = 'PDiff'; % which predictor to plot: 'H' | 'Hnorm' | 'PMax' | 'PDiff'
+predFieldPlot = 'Hnorm_Sim'; % which predictor to plot: 'H' | 'Hnorm' | 'PMax' | 'PDiff' | 'H_sim' | 'Hnorm_Sim' | 'PMax_Sim' | 'PDiff_Sim'
 figPos = [100 100 560 260];
 minSubjForFit = 3; % minimum subjects (within one age group) required to fit/draw its regression line
 

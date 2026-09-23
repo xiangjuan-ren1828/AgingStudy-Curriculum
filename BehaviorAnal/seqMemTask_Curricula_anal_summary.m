@@ -46,7 +46,7 @@ yCir   = RChunk * sin(angCir) + centerY;
 
 expList = {'interleaved', 'contentBlocked', 'positionBlocked'};
 nCond   = length(expList);
-expId   = expList{3};
+expId   = expList{2};
 if isequal(expId, 'interleaved')
     subjList_young = {'5ad63c167f70c10001904bc5', '2023-08-30_17h17.39.428'; '5bdb51e1ba9b510001052364', '2023-08-30_15h12.00.151'; '5c4b06903566570001309394', '2023-08-30_16h55.13.543'; ...
                       '5d024a1fb58b6f001a58f74d', '2023-08-30_15h11.44.361'; '5d43404f1e6eef00011dec22', '2023-08-30_15h12.02.990'; '5ef25afb8ebcdf0b2b95d9cd', '2023-08-30_15h09.37.394'; ...
@@ -149,6 +149,16 @@ nSub_group(:, 3) = [21, 25]';
 %% ------ Check participants' gender and age ------
 
 
+%% ------ Quantify the maximal distance between the ground truth and participants' responses ------
+nDisp    = nTrans + nDtr;
+seq      = (1 : nDisp) - 1; % responding 6 is impossible for the retrieval; replacing 6 with 0 in the true sequence
+allPerms = perms(seq);
+allPerms_dist = nan(size(allPerms, 1), 1);
+for iPm = 1 : size(allPerms, 1)
+    allPerms_dist(iPm) = sum(abs(seq - allPerms(iPm, :)));
+end
+distMax = max(allPerms_dist);
+
 %% ------ Image confusion matrix ------
 imgNameList = {'car', 'castle', 'cat', 'cream', 'female', 'hat', 'key', 'sunflower'};
 
@@ -221,6 +231,23 @@ allMeas_inOne_group = cell(1, nGroup);
 
 % ----------False alarm from the lure stimuli----------
 FA_lure_group = cell(1, nGroup);
+% FA_lure_clean_: same as FA_lure_ but excludes lure picks where the
+% distractor image/location is itself perceptually confusable (top-conProxK
+% similar image, or within proxThresh angular distance) with one of the
+% trial's true items — isolating genuine cross-sequence intrusions from
+% image/location confusion.
+FA_lure_clean_group = cell(1, nGroup);
+
+% ----------Order confusion (forward vs. backward)----------
+% For non-lure errors at recall steps 2-4 (steps 1 and 5 are excluded since they
+% lack a true predecessor/successor respectively): backward = participant chose
+% the item whose true step is one earlier; forward = chose the item whose true
+% step is one later. Pooled across trials, normalized by the total number of
+% non-lure errors at steps 2-4.
+orderConf_con_group      = cell(1, nGroup); % content-only report
+orderConf_loc_group      = cell(1, nGroup); % location-only report
+orderConf_con_both_group = cell(1, nGroup); % content dimension, joint/reconstruction report
+orderConf_loc_both_group = cell(1, nGroup); % location dimension, joint/reconstruction report
 
 % ----choice (per slot) for the within-trial measures and between-trial measure (the data is partly overlapped)----
 choice_within_between_trials_group = [];
@@ -276,6 +303,10 @@ conSimChanceByPos_free_both_group = cell(1, nGroup);
 
 % ----------accuracy for each slot----------
 accSlot_group = cell(1, nGroup); 
+
+% ----------quantify the response distance between ground truth and
+% participants' responses----------
+respDist_group = cell(1, nGroup);
     
 %% loop over groups and participants
 suffixWord = expId;
@@ -339,6 +370,15 @@ for iGrp = 1 : nGroup %% younger and older adults
 
     % ------False alarm from the lure stimuli------
     FA_lure_subj = nan(subLen, 2, 2); % first 2: item and location; second 2: partial and full retrieval
+    % ------False alarm from the lure stimuli, excluding image/location confusion------
+    FA_lure_clean_subj = nan(subLen, 2, 2); % same layout as FA_lure_subj
+
+    % ------Order confusion (forward vs. backward) per subject------
+    % Columns: [backward, forward] proportions of non-lure errors at recall steps 2-4.
+    orderConf_con_subj      = nan(subLen, 2);
+    orderConf_loc_subj      = nan(subLen, 2);
+    orderConf_con_both_subj = nan(subLen, 2);
+    orderConf_loc_both_subj = nan(subLen, 2);
 
     % ----choice (per slot) for the within-trial measures and between-trial measure (the data is partly overlapped)----
     choice_within_between_trials_subj = [];
@@ -384,6 +424,10 @@ for iGrp = 1 : nGroup %% younger and older adults
 
     % ------ accuracy for each slot ------
     accSlot_subj  = nan(subLen, nTrans, 4); % 3: object/location/full retrieval in the 3-retrieval trials/full retrieval in the full-retrieval-only trials
+
+    % ----------quantify the response distance between ground truth and
+    % participants' responses----------
+    respDist_subj  = nan(subLen, 4); % distance for object, location retrieval and two dimensions from the full retrieval
 
     %%
     for iSub = 1 : subLen
@@ -562,6 +606,40 @@ for iGrp = 1 : nGroup %% younger and older adults
             end
             bothRT_col{i} = bothRT_Ref;
         end
+
+        %% ----------quantify the response distance between ground truth and participants' responses----------
+        % respDist_subj = nan(subLen, 4);
+        respDist_trial = nan(nEpi, 4);
+        for i = 1 : nEpi
+            % ------ partial retrieval ------
+            if reconsOnly(i) == 0 %% non reconstruction only trial
+                % ---- Object retrieval ----
+                conTrue_i = conTrue_col{i};
+                conRep_i  = conRep_col{i}; 
+                conTrue_i(conTrue_i == 6) = 0;
+
+                % ---- Location retrieval ----
+                locTrue_i = locTrue_col{i};
+                locRep_i  = locRep_col{i};
+                locTrue_i(locTrue_i == 6) = 0;
+
+                respDist_trial(i, 1) = sum(abs(conTrue_i - conRep_i)) / distMax;
+                respDist_trial(i, 2) = sum(abs(locTrue_i - locRep_i)) / distMax;
+            end
+
+            % ------ Full retrieval ------
+            % ---- object dimension ----
+            bothTrue_con_i = [1, 2, 3, 4, 5, 0];
+            bothRep_con_i  = bothRep_col{i}(1, :);
+
+            % ---- location dimension ----
+            bothTrue_loc_i = [1, 2, 3, 4, 5, 0];
+            bothRep_loc_i  = bothRep_col{i}(2, :);
+
+            respDist_trial(i, 3) = sum(abs(bothTrue_con_i - bothRep_con_i)) / distMax;
+            respDist_trial(i, 4) = sum(abs(bothTrue_loc_i - bothRep_loc_i)) / distMax;
+        end
+        respDist_subj(iSub, :) = nanmean(respDist_trial, 1);
 
         %% ---- Location error proximity analysis ----
         % Data format: locTrue_i and locRep_i are both indexed by display slot j (1..6).
@@ -807,7 +885,7 @@ for iGrp = 1 : nGroup %% younger and older adults
         nErrCon = sum(conErrCnt);
         % the two numbers denote 1) the proportion that participants chose the 'similar' images; 2) the proportion that participants chose the other images;
         if nErrCon > 0
-            conErrType_subj(iSub, :) = conErrCnt / nErrCon; 
+            conErrType_subj(iSub, :) = conErrCnt / nErrCon;
         end
         % classification results for each response order
         for iP = 1 : nTrans
@@ -1864,7 +1942,22 @@ for iGrp = 1 : nGroup %% younger and older adults
         bothLure = zeros(nEpi, 2); % 2: item and location dimension in the full retrieval
         % ---------- note down the trial index where the lure stimulus was picked ----------
         lure_trialIdx = zeros(nEpi, 3); % 3: item, location and full retrieval
+
+        % ---------- "clean" lure: excludes picks confusable with the true item that ----------
+        % belonged in the slot/step the lure ended up occupying (i.e. whichever true item
+        % SHOULD have been reported at that recall step, not the other true items in the
+        % trial). A distractor is "confusable" (content) if it falls within the top-conProxK
+        % most similar images to that one true image (conSimMat), or (location) if it is
+        % within proxThresh angular distance of that one true location.
+        conLure_clean  = nan(nEpi, 1);
+        locLure_clean  = nan(nEpi, 1);
+        bothLure_clean = zeros(nEpi, 2);
+
         for i = 1 : nEpi
+            imgIds = conSeqTrl_col{i};
+            pX     = posX_col{i};
+            pY     = posY_col{i};
+
             if reconsOnly(i) == 0 %% non reconstruction only trial
                 % item retrieval
                 conTrue_i   = conTrue_col{i};
@@ -1873,18 +1966,89 @@ for iGrp = 1 : nGroup %% younger and older adults
                 conRep_lure = conRep_i(conLure_i);
                 conLure(i)  = (conRep_lure ~= 0 | sum(conRep_i == 6) ~= 0); % check if the distractor image was picked
 
+                % conRep_lure (if nonzero) is the recall step the lure was placed at.
+                % The "correct answer" for that step is whichever true display position
+                % was supposed to be reported there.
+                conConfusable = false;
+                if conRep_lure ~= 0
+                    truePos_klure = find(conTrue_i == conRep_lure);
+                    if ~isempty(truePos_klure) && truePos_klure ~= conLure_i
+                        distrImgId      = imgIds(conLure_i);
+                        trueImgId_klure = imgIds(truePos_klure);
+                        otherImgIds     = setdiff(1 : size(conSimMat, 1), trueImgId_klure);
+                        [~, sortIdx]    = sort(conSimMat(trueImgId_klure, otherImgIds), 'descend');
+                        proxImgIds      = otherImgIds(sortIdx(1 : conProxK));
+                        conConfusable   = ismember(distrImgId, proxImgIds);
+                    end
+                end
+                conLure_clean(i) = conLure(i) & ~conConfusable;
+
                 % location retrieval
                 locTrue_i   = locTrue_col{i};
                 locRep_i    = locRep_col{i};
                 locLure_i   = find(locTrue_i == 6); % always the last one
                 locRep_lure = locRep_i(locLure_i);
                 locLure(i)  = (locRep_lure ~= 0 | sum(locRep_i ==6) ~= 0); % check if the distractor location was picked: though sum(locRep_i ==6) ~= 0 is a redundant check in location retrieval
+
+                % locRep_lure (if nonzero) is the recall step the lure was placed at.
+                % The "correct answer" for that step is whichever true display slot was
+                % supposed to be reported there.
+                locConfusable = false;
+                if locRep_lure ~= 0
+                    trueSlot_klure = find(locTrue_i == locRep_lure);
+                    if ~isempty(trueSlot_klure) && trueSlot_klure ~= locLure_i
+                        theta_true    = atan2(pY(trueSlot_klure), pX(trueSlot_klure));
+                        theta_distr   = atan2(pY(locLure_i), pX(locLure_i));
+                        arc           = mod(theta_distr - theta_true, 2*pi);
+                        arc           = min(arc, 2*pi - arc);
+                        locConfusable = arc < proxThresh;
+                    end
+                end
+                locLure_clean(i) = locLure(i) & ~locConfusable;
             end
+
             % full retrieval
             bothRep_i      = bothRep_col{i}; % 2 row: content and position
             bothLure(i, 1) = (sum(bothRep_i(1, :) == 6) | bothRep_i(1, end) ~= 0);
             bothLure(i, 2) = (sum(bothRep_i(2, :) == 6) | bothRep_i(2, end) ~= 0);
 
+            % content: display position → sequence step in the joint report (see the
+            % "Full retrieval (reconstruction) confusion analysis" section above for
+            % why bothTrue_col{i} — not conTrue_col{i} — is the correct truth mapping here).
+            % bothRep_i(1, k) = sequence step of the image placed at output slot k, so the
+            % slot the lure occupies is find(bothRep_i(1,:)==6); the "correct answer" for
+            % that slot is whichever true display position corresponds to that same step.
+            conTrue_both     = bothTrue_col{i};
+            conLure_pos_both = find(conTrue_both == 6);
+            distrImgId_both  = imgIds(conLure_pos_both);
+            k_lure_both      = find(bothRep_i(1, :) == 6);
+            conConfusable_both = false;
+            if ~isempty(k_lure_both)
+                truePos_klure_both = find(conTrue_both == k_lure_both);
+                if ~isempty(truePos_klure_both) && truePos_klure_both ~= conLure_pos_both
+                    trueImgId_klure  = imgIds(truePos_klure_both);
+                    otherImgIds      = setdiff(1 : size(conSimMat, 1), trueImgId_klure);
+                    [~, sortIdx]     = sort(conSimMat(trueImgId_klure, otherImgIds), 'descend');
+                    proxImgIds       = otherImgIds(sortIdx(1 : conProxK));
+                    conConfusable_both = ismember(distrImgId_both, proxImgIds);
+                end
+            end
+            bothLure_clean(i, 1) = bothLure(i, 1) & ~conConfusable_both;
+
+            % location: display slot 6 is trivially the lure (locations are not shuffled
+            % between the marginal and joint reports). bothRep_i(2, j) is indexed by
+            % display slot directly, so the recall step assigned to slot 6 tells us which
+            % true slot's item "should" have been reported there.
+            k_lure_loc_both     = bothRep_i(2, 6);
+            locConfusable_both  = false;
+            if k_lure_loc_both ~= 0 && k_lure_loc_both ~= 6
+                theta_true_both   = atan2(pY(k_lure_loc_both), pX(k_lure_loc_both));
+                theta_distr_both  = atan2(pY(6), pX(6));
+                arc               = mod(theta_distr_both - theta_true_both, 2*pi);
+                arc               = min(arc, 2*pi - arc);
+                locConfusable_both = arc < proxThresh;
+            end
+            bothLure_clean(i, 2) = bothLure(i, 2) & ~locConfusable_both;
         end
         % ---------- partial retrieval ----------
         FA_lure_subj(iSub, 1, 1) = nansum(conLure) / sum(~reconsOnly);
@@ -1894,9 +2058,174 @@ for iGrp = 1 : nGroup %% younger and older adults
         FA_lure_subj(iSub, 1, 2) = sum(bothLure(:, 1)) / nEpi;
         FA_lure_subj(iSub, 2, 2) = sum(bothLure(:, 2)) / nEpi;
 
+        % ---------- partial retrieval, confusion-excluded ----------
+        FA_lure_clean_subj(iSub, 1, 1) = nansum(conLure_clean) / sum(~reconsOnly);
+        FA_lure_clean_subj(iSub, 2, 1) = nansum(locLure_clean) / sum(~reconsOnly);
+
+        % ---------- full retrieval, confusion-excluded ----------
+        FA_lure_clean_subj(iSub, 1, 2) = sum(bothLure_clean(:, 1)) / nEpi;
+        FA_lure_clean_subj(iSub, 2, 2) = sum(bothLure_clean(:, 2)) / nEpi;
+
         lure_trialIdx(:, 1) = conLure;
         lure_trialIdx(:, 2) = locLure;
         lure_trialIdx(:, 3) = (bothLure(:, 1) == 1 | bothLure(:, 2) == 1);
+
+        %% ------ Order confusion ------
+        % forward and backward confusion symmetric or non-symmetric
+        % write by XR @ Sep 13 2026
+        % For a non-lure error at recall step k, "backward" = participant instead
+        % reported the item whose true step is k-1; "forward" = the item whose true
+        % step is k+1. Only steps 2-4 are evaluated (step 1 has no predecessor,
+        % step 5 has no true successor — its successor would be the lure at step 6).
+        % Counts are pooled across all trials, then normalized by the total number of
+        % adjacent (backward + forward) errors at steps 2-4, so the two proportions
+        % sum to 1; non-adjacent order errors (otherCnt_*) are tracked but excluded
+        % from this denominator.
+        % ---------- image/location confusion contamination control ----------
+        % A backward/forward pick is only counted if the chosen (adjacent) item is
+        % NOT itself perceptually confusable with the correct target for step k —
+        % i.e. NOT among the top-conProxK most similar images (content) / within
+        % proxThresh angular distance (location). This rules out cases where the
+        % adjacent-order match could equally be explained by simple image/location
+        % confusion rather than a genuine order/sequence confusion.
+        backwardCnt_con      = 0; forwardCnt_con      = 0; otherCnt_con      = 0;
+        backwardCnt_loc      = 0; forwardCnt_loc      = 0; otherCnt_loc      = 0;
+        backwardCnt_con_both = 0; forwardCnt_con_both = 0; otherCnt_con_both = 0;
+        backwardCnt_loc_both = 0; forwardCnt_loc_both = 0; otherCnt_loc_both = 0;
+
+        for i = 1 : nEpi
+            imgIds = conSeqTrl_col{i};
+            pX     = posX_col{i};
+            pY     = posY_col{i};
+
+            if reconsOnly(i) == 0
+                % ---- partial content ----
+                conTrue_i = conTrue_col{i};
+                conRep_i  = conRep_col{i};
+                for k = 2 : 4
+                    truePos_k  = find(conTrue_i == k);
+                    repPos_arr = find(conRep_i == k);
+                    if isempty(repPos_arr), continue; end   % no response at this step
+                    repPos_k = repPos_arr;
+                    if repPos_k == truePos_k,   continue; end % correct response
+                    if conTrue_i(repPos_k) == 6, continue; end % lure response, excluded
+                    trueOrderChosen = conTrue_i(repPos_k);
+                    if trueOrderChosen == k - 1 || trueOrderChosen == k + 1
+                        if isConImgConfusable(imgIds, truePos_k, repPos_k, conSimMat, conProxK)
+                            continue; % contaminated by image confusion, rule out
+                        end
+                        if trueOrderChosen == k - 1
+                            backwardCnt_con = backwardCnt_con + 1;
+                        else
+                            forwardCnt_con = forwardCnt_con + 1;
+                        end
+                    else
+                        otherCnt_con = otherCnt_con + 1;
+                    end
+                end
+
+                % ---- partial location ----
+                locTrue_i = locTrue_col{i};
+                locRep_i  = locRep_col{i};
+                for k = 2 : 4
+                    trueSlot_k  = find(locTrue_i == k);
+                    repSlot_arr = find(locRep_i == k);
+                    if isempty(repSlot_arr), continue; end
+                    repSlot_k = repSlot_arr;
+                    if repSlot_k == trueSlot_k,  continue; end
+                    if locTrue_i(repSlot_k) == 6, continue; end
+                    trueOrderChosen = locTrue_i(repSlot_k);
+                    if trueOrderChosen == k - 1 || trueOrderChosen == k + 1
+                        if isLocConfusable(pX, pY, trueSlot_k, repSlot_k, proxThresh)
+                            continue; % contaminated by location confusion, rule out
+                        end
+                        if trueOrderChosen == k - 1
+                            backwardCnt_loc = backwardCnt_loc + 1;
+                        else
+                            forwardCnt_loc = forwardCnt_loc + 1;
+                        end
+                    else
+                        otherCnt_loc = otherCnt_loc + 1;
+                    end
+                end
+            end
+
+            % ---- full retrieval: content (needs the same order inversion used in
+            % the "Full retrieval (reconstruction) confusion analysis" section) ----
+            bothRep_i    = bothRep_col{i};
+            conTrue_both = bothTrue_col{i};
+            conRep_both  = zeros(1, nTrans + nDtr);
+            for k = 1 : (nTrans + nDtr)
+                seqStep = bothRep_i(1, k);
+                if seqStep == 0, continue; end
+                dispPos = find(conTrue_both == seqStep);
+                if ~isempty(dispPos), conRep_both(dispPos) = k; end
+            end
+            for k = 2 : 4
+                truePos_k  = find(conTrue_both == k);
+                repPos_arr = find(conRep_both == k);
+                if isempty(repPos_arr), continue; end
+                repPos_k = repPos_arr;
+                if repPos_k == truePos_k,        continue; end
+                if conTrue_both(repPos_k) == 6,  continue; end
+                trueOrderChosen = conTrue_both(repPos_k);
+                if trueOrderChosen == k - 1 || trueOrderChosen == k + 1
+                    if isConImgConfusable(imgIds, truePos_k, repPos_k, conSimMat, conProxK)
+                        continue; % contaminated by image confusion, rule out
+                    end
+                    if trueOrderChosen == k - 1
+                        backwardCnt_con_both = backwardCnt_con_both + 1;
+                    else
+                        forwardCnt_con_both = forwardCnt_con_both + 1;
+                    end
+                else
+                    otherCnt_con_both = otherCnt_con_both + 1;
+                end
+            end
+
+            % ---- full retrieval: location (locTrue_both is trivially 1:6, and
+            % bothRep_i(2,:) is already indexed by display slot — no inversion needed) ----
+            locTrue_both = 1 : (nTrans + nDtr);
+            locRep_both  = bothRep_i(2, :);
+            for k = 2 : 4
+                trueSlot_k  = find(locTrue_both == k);
+                repSlot_arr = find(locRep_both == k);
+                if isempty(repSlot_arr), continue; end
+                repSlot_k = repSlot_arr;
+                if repSlot_k == trueSlot_k,         continue; end
+                if locTrue_both(repSlot_k) == 6,    continue; end
+                trueOrderChosen = locTrue_both(repSlot_k);
+                if trueOrderChosen == k - 1 || trueOrderChosen == k + 1
+                    if isLocConfusable(pX, pY, trueSlot_k, repSlot_k, proxThresh)
+                        continue; % contaminated by location confusion, rule out
+                    end
+                    if trueOrderChosen == k - 1
+                        backwardCnt_loc_both = backwardCnt_loc_both + 1;
+                    else
+                        forwardCnt_loc_both = forwardCnt_loc_both + 1;
+                    end
+                else
+                    otherCnt_loc_both = otherCnt_loc_both + 1;
+                end
+            end
+        end
+
+        nAdj_con = backwardCnt_con + forwardCnt_con;
+        if nAdj_con > 0
+            orderConf_con_subj(iSub, :) = [backwardCnt_con, forwardCnt_con] / nAdj_con;
+        end
+        nAdj_loc = backwardCnt_loc + forwardCnt_loc;
+        if nAdj_loc > 0
+            orderConf_loc_subj(iSub, :) = [backwardCnt_loc, forwardCnt_loc] / nAdj_loc;
+        end
+        nAdj_con_both = backwardCnt_con_both + forwardCnt_con_both;
+        if nAdj_con_both > 0
+            orderConf_con_both_subj(iSub, :) = [backwardCnt_con_both, forwardCnt_con_both] / nAdj_con_both;
+        end
+        nAdj_loc_both = backwardCnt_loc_both + forwardCnt_loc_both;
+        if nAdj_loc_both > 0
+            orderConf_loc_both_subj(iSub, :) = [backwardCnt_loc_both, forwardCnt_loc_both] / nAdj_loc_both;
+        end
 
     end
     %%
@@ -1932,7 +2261,14 @@ for iGrp = 1 : nGroup %% younger and older adults
     transAcc_count_secondHalf_group{2, iGrp} = transAcc_count_join_secondHalf_subj;
 
     % ----------False alarm from the lure stimuli----------
-    FA_lure_group{iGrp} = FA_lure_subj;
+    FA_lure_group{iGrp}       = FA_lure_subj;
+    FA_lure_clean_group{iGrp} = FA_lure_clean_subj;
+
+    % ----------Order confusion (forward vs. backward)----------
+    orderConf_con_group{iGrp}      = orderConf_con_subj;
+    orderConf_loc_group{iGrp}      = orderConf_loc_subj;
+    orderConf_con_both_group{iGrp} = orderConf_con_both_subj;
+    orderConf_loc_both_group{iGrp} = orderConf_loc_both_subj;
 
     % ----------Location error proximity analysis----------
     locErrType_group{iGrp}           = locErrType_subj;
@@ -1969,6 +2305,10 @@ for iGrp = 1 : nGroup %% younger and older adults
 
     % ----------accuracy for each slot----------
     accSlot_group{iGrp} = accSlot_subj;
+
+    % ----------quantify the response distance between ground truth and
+    % participants' responses----------
+    respDist_group{iGrp} = respDist_subj;
 
     %% calculate the mean across subjects, for each report
     if iGrp == 1 % younger group
@@ -2037,6 +2377,7 @@ end
 save([CLdata_folder, 'acc_group_YAOA_', suffixWord, '.mat'], 'acc_group');
 save([CLdata_folder, 'acc_subj_orderUP_YAOA_', suffixWord, '.mat'], 'acc_subj_orderUP_group');
 save([CLdata_folder, 'FA_lure_YAOA_', suffixWord, '.mat'], 'FA_lure_group');
+save([CLdata_folder, 'FA_lure_clean_YAOA_', suffixWord, '.mat'], 'FA_lure_clean_group');
 save([CLdata_folder, 'binds_conPctr_YAOA_', suffixWord, '.mat'], 'binds_conPctr_group');
 save([CLdata_folder, 'acc_group_post_YAOA_', suffixWord, '.mat'], 'acc_group_post');
 
@@ -2577,6 +2918,68 @@ elseif figKey == 1
 end
 box off;
 
+%% response distance between ground truth and participants' responses 
+% added by XR @ Sep 19 2026
+% respDist_group = cell(1, nGroup);
+% respDist_subj  = nan(subLen, 4); % distance for object, location retrieval and two dimensions from the full retrieval
+
+figKey = 1;
+if figKey == 0
+    barLineWid = 2;
+    errLineWid = 3;
+    refLineWid = 1;
+elseif figKey == 1
+    barLineWid = 1;
+    errLineWid = 2;
+    refLineWid = 0.5;
+end
+figure('Position', [100 100 320 150]), clf;
+barPos = [1, 1.4, 2.1, 2.5;...  % YA
+          3.5, 3.9, 4.6, 5.0]; % OA
+color_iGrp = colorGrp([1, 4, 3, 6], :);
+
+p_recons_nGroup  = nan(1, 2);
+for iA = 1 : 2 % YA and OA group
+    if iA == 1
+        disp('==========YA==========')
+    elseif iA == 2
+        disp('==========OA==========')
+    end
+    dist_iGrp = respDist_group{iA};
+    [dist_avg, dist_sem] = Mean_and_Se(dist_iGrp, 1);
+    for iC = 1 : 4 % 1) object retrieval; 2) location retrieval; 3) object dimension in full retrieval; 4) location dimension in full retrieval;
+        barPos_i = barPos(iA, iC);
+        b = bar(barPos_i, dist_avg(iC), 0.45, 'LineStyle', '-', 'LineWidth', barLineWid); hold on;
+        b.FaceColor = color_iGrp(iC, :);
+        errorbar(barPos_i, dist_avg(iC), dist_sem(iC), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
+        plot(barPos_i, dist_avg(iC), 'Marker', '.', 'MarkerSize', 15, 'Color', 'k'); hold on;
+    end
+
+    % ------Comparison of the same dimension between partial and full retrieval------
+    disp('------distance object retieval vs. object dimension of full retrieval------')
+    [h, p, ci, stats] = ttest(dist_iGrp(:, 1), dist_iGrp(:, 3), 'tail', 'both')
+    disp('------distance location retieval vs. location dimension of full retrieval------')
+    [h, p, ci, stats] = ttest(dist_iGrp(:, 2), dist_iGrp(:, 4), 'tail', 'both')
+end
+
+xlim([0.7, 5.3]);
+ylim([0, 0.4]);
+plot([3, 3], ylim, 'k:', 'LineWidth', 1); hold on;
+if figKey == 0
+    % ------For presentation------
+    set(gca, 'LineWidth', 2);
+    set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
+    set(gca, 'XTick', '', 'XTickLabel', '');
+    set(gca, 'YTick', [0.5, 1], 'YTickLabel', [0.5, 1]); 
+elseif figKey == 1
+    % ------For Adobe Illustrator------
+    set(gca, 'LineWidth', 0.8);
+    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
+    set(gca, 'XTick', [1, 1.4, 2.1, 2.5, 3.5, 3.9, 4.6, 5.0], 'XTickLabel', '');
+    %set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', {'', '', ''});
+end
+box off;
+
 %% ---------- Figure 2D in Experiment 2 (replication in Experiment 1); lure effect ----------
 figKey = 1;  % 0: figure for presentation; 1: figure for AI.
 if figKey == 0
@@ -2631,6 +3034,126 @@ elseif figKey == 1
 end
 box off;
 
+%% ---------- Figure 2D (confusion-excluded); "clean" lure effect ----------
+% Same as Figure 2D above but using FA_lure_clean_group: lure picks that are
+% explainable by image/location confusion (top-conProxK similar image, or
+% within proxThresh of a true location) are excluded from the numerator.
+figKey = 1;  % 0: figure for presentation; 1: figure for AI.
+if figKey == 0
+    barLineWid = 2;
+    errLineWid = 3;
+    refLineWid = 1;
+elseif figKey == 1
+    barLineWid = 1;
+    errLineWid = 1.5; %2;
+    refLineWid = 0.5;
+end
+barPos = [1, 1.7, 2.0, 2.7];
+figure('Position', [100 100 160 120]), clf;
+for iGrp = 1 : nGroup % YA and OA
+    FA_lure_clean_iGrp = FA_lure_clean_group{iGrp}; % subLen * 2(item/loc) * 2(partial/full)
+    FA_lure_clean_iGrp = nanmean(FA_lure_clean_iGrp, 3);
+    if iGrp == 1
+        disp('------YA (clean)------')
+    elseif iGrp == 2
+        disp('------OA (clean)------')
+    end
+    iDm_idx = (iGrp - 1) * 2 + 1 : iGrp * 2;
+    [tAcc_avg, tAcc_sem] = Mean_and_Se(FA_lure_clean_iGrp, 1);
+    barPos_i = barPos(iDm_idx);
+    plot(barPos_i, FA_lure_clean_iGrp, 'Color', [0.6, 0.6, 0.6], 'LineStyle', '-', 'LineWidth', 0.4); hold on;
+    plot(barPos_i, tAcc_avg, 'Color', [0, 0, 0], 'LineStyle', '-', 'LineWidth', errLineWid); hold on;
+
+    for iDm = 1 : 2 % item or location dimension
+        errorbar(barPos_i(iDm), tAcc_avg(iDm), tAcc_sem(iDm), 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
+        plot(barPos_i(iDm), tAcc_avg(iDm), 'Marker', 'o', 'MarkerSize', 4.5, 'MarkerEdgeColor', [0, 0, 0], 'MarkerFaceColor', color_Grp(iDm, :), 'LineStyle', '-'); hold on;
+    end
+    % ------ Statistical tests ------
+    disp('======== FA (clean): item vs. location ========');
+    [h, p, ci, stats] = ttest(FA_lure_clean_iGrp(:, 1), FA_lure_clean_iGrp(:, 2))
+end
+xlim([0.6, 3.1]);
+ylim([0, 1]);
+if figKey == 0
+    % ------For presentation------
+    plot(xlim, [1/5, 1/5], 'Color', [0, 0, 0], 'LineStyle', ':', 'LineWidth', 1); hold on;
+    set(gca, 'LineWidth', 2);
+    set(gca, 'FontSize', 15, 'FontWeight', 'bold', 'FontName', 'Arial');
+    set(gca, 'XTick', '', 'XTickLabel', '');
+    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', 0 : 0.5 : 1);
+elseif figKey == 1
+    % ------For Adobe Illustrator------
+    %plot(xlim, [1/5, 1/5], 'Color', [0, 0, 0], 'LineStyle', ':', 'LineWidth', refLineWid); hold on;
+    set(gca, 'LineWidth', 0.6); % 0.8
+    set(gca, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
+    set(gca, 'XTick', '', 'XTickLabel', '');
+    set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', {'', '', ''});
+end
+box off;
+
+%% ---------- Order confusion (forward vs. backward): figures ----------
+% orderConf_*_group{iGrp} columns: [backward, forward] proportions of adjacent
+% (backward+forward) order errors at recall steps 2-4, excluding lure responses.
+% Since backward + forward = 1, only the forward proportion is plotted (backward
+% is its complement). YA and OA are shown together in one figure per condition;
+% partial vs. full/joint retrieval and content vs. location are plotted separately.
+% A one-sample t-test against 0.5 (chance / no forward-backward asymmetry) is
+% printed for each group, equivalent to the paired backward-vs-forward test.
+figKey = 1;  % 0: figure for presentation; 1: figure for AI.
+if figKey == 0
+    barLineWid = 2;
+    errLineWid = 3;
+    refLineWid = 1;
+elseif figKey == 1
+    barLineWid = 1;
+    errLineWid = 1.5; %2;
+    refLineWid = 0.5;
+end
+
+errTypeNames_order = {'younger', 'older'};
+colorOrder_grp = [0.20, 0.45, 0.70; 0.80, 0.30, 0.20]; % (1) YA; (2) OA
+barPos_err = [1; 2.5]; % one bar position per group
+
+orderConf_figSpecs = {
+    orderConf_con_group,      'Content (partial retrieval): forward proportion';
+    orderConf_loc_group,      'Location (partial retrieval): forward proportion';
+    orderConf_con_both_group, 'Content (full retrieval): forward proportion';
+    orderConf_loc_both_group, 'Location (full retrieval): forward proportion';
+};
+
+for iFig = 1 : size(orderConf_figSpecs, 1)
+    orderConf_group_iFig = orderConf_figSpecs{iFig, 1};
+    disp(['======== ', orderConf_figSpecs{iFig, 2}, ' ========']);
+    figure('Position', [100 100 180 180]), clf;
+    for iGrp = 1 : nGroup % YA and OA
+        dat = orderConf_group_iFig{iGrp}(:, 2); % subLen × 1: forward proportion only
+        dat_avg = nanmean(dat);
+        dat_sem = nanstd(dat) / sqrt(sum(~isnan(dat)));
+        bP = barPos_err(iGrp);
+        xRand_iGrp  = unifrnd(bP - 0.2, bP + 0.2, length(dat), 1);
+        xRand_color = 0.4 * colorOrder_grp(iGrp, :) + 0.6 * [1, 1, 1];
+        for iSub = 1 : length(dat)
+            plot(xRand_iGrp(iSub), dat(iSub), 'Marker', 'o', 'MarkerSize', 6, 'MarkerFaceColor', xRand_color, 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.6); hold on
+        end
+        errorbar(bP, dat_avg, dat_sem, 'Color', 'k', 'LineStyle', 'none', 'LineWidth', errLineWid); hold on;
+        plot(bP, dat_avg, 'Marker', 'o', 'MarkerSize', 8, 'MarkerFaceColor', colorOrder_grp(iGrp, :), 'MarkerEdgeColor', 'k', 'LineStyle', '-', 'LineWidth', 0.8); hold on
+
+        fprintf('%s\n', errTypeNames_order{iGrp});
+        dat_noNan = dat(~isnan(dat));
+        [h, p, ci, stats] = ttest(dat_noNan, 0.5)
+    end
+    plot([0.4, 3.1], [0.5, 0.5], 'k--', 'LineWidth', 0.6); hold on; % chance / no asymmetry
+    disp('-------- t-test: forward proportion YA vs. OA --------')
+    [h, p, ci, stats] = ttest2(orderConf_group_iFig{1}(:, 2), orderConf_group_iFig{2}(:, 2))
+    xlim([0.4, 3.1]);
+    ylim([0, 1]);
+    set(gca, 'LineWidth', 0.8, 'FontSize', 10, 'FontWeight', 'bold', 'FontName', 'Arial');
+    set(gca, 'XTick', barPos_err', 'XTickLabel', {'YA', 'OA'});
+    set(gca, 'YTick', 0 : 0.25 : 1, 'YTickLabel', {'0', '0.25', '0.5', '0.75', '1'});
+    title(orderConf_figSpecs{iFig, 2}, 'FontSize', 8, 'FontWeight', 'normal');
+    box off;
+end
+
 %% ---------- Figure 2E in Experiment 2 (replication in Experiment 1); transition accurcy ----------
 figKey = 1;  % 0: figure for presentation; 1: figure for AI.
 if figKey == 0
@@ -2646,10 +3169,11 @@ barPos = [1, 1.7, 2.0, 2.7];
 condsWord = 'marginal+full';
 for iGrp = 1 : nGroup % YA and OA
     if iGrp == 1
-        disp('------YA------')
+        groupName = 'YA'; 
     elseif iGrp == 2
-        disp('------OA------')
+        groupName = 'OA';
     end
+    disp(['------', groupName, '------'])
     figure('Position', [100 100 150 120]), clf;
     for iDm = 1 : 2 % item or location dimension
         if iDm == 1
@@ -2702,6 +3226,9 @@ for iGrp = 1 : nGroup % YA and OA
         set(gca, 'YTick', 0 : 0.5 : 1, 'YTickLabel', {'', '', ''});
     end
     box off;
+    figH = gcf;
+    save_name = ['transAcc_', groupName, '.png'];
+    exportgraphics(figH, save_name, 'Resolution', 600);
 end
 
 %% ---------- Figure 2G in Experiment 2 (replication in Experiment 1): grand average of the binding score for the other dimension correct vs. incorrect in YA and OA ----------
@@ -2721,10 +3248,11 @@ binds_dataAnal_grandAvg = cell(1, nGroup);
 bindScore_grandAvg = cell(1, nGroup);
 for iGrp = 1 : nGroup
     if iGrp == 1
-        disp('------YA------')
+        groupName = 'YA';
     elseif iGrp == 2
-        disp('------OA------')
+        groupName = 'OA';
     end
+    disp(['------', groupName, '------'])
     %%% ------ Average across different dimension ------
     %%% ----Partial retrieval----
     binds_dataAnal_partial = nanmean(binds_dataAnal{1, iGrp}(:, :, 1 : 2), 3); % subj * 4 * 2
@@ -2771,6 +3299,9 @@ for iGrp = 1 : nGroup
     end
     box off;
 
+    figH = gcf;
+    save_name = ['binding_', groupName, '.png'];
+    exportgraphics(figH, save_name, 'Resolution', 600);
 end
 
 %% ------ Check the binding score ------
@@ -3065,7 +3596,7 @@ end
 box off;
 ax = gca;
 save_name = 'LocationConfusion.png';
-exportgraphics(ax, save_name, 'Resolution', 600);
+% exportgraphics(ax, save_name, 'Resolution', 600);
 
 % ---- Figure: proximity error rate by sequence position ----
 % Chance reference is per-position (occupancy-adjusted), shown as a dashed line.
@@ -3205,7 +3736,7 @@ end
 box off;
 ax = gca;
 save_name = 'ImgeConfusion.png';
-exportgraphics(ax, save_name, 'Resolution', 600);
+% exportgraphics(ax, save_name, 'Resolution', 600);
 
 % ---- Figure: content proximity error rate by recall step ----
 % figure('Position', [100 100 280 180]), clf;
@@ -3679,4 +4210,25 @@ for iGrp = 1 : nGroup % YA and OA
     box off;
 end
 
+%% ---------- Local helper functions (used by the "Order confusion" analysis) ----------
+function tf = isConImgConfusable(imgIds, truePos, chosenPos, conSimMat, conProxK)
+% True if the image at chosenPos is among the top-conProxK images most similar
+% to the true image at truePos (same similarity logic used for FA_lure_clean_).
+trueImgId    = imgIds(truePos);
+chosenImgId  = imgIds(chosenPos);
+otherImgIds  = setdiff(1 : size(conSimMat, 1), trueImgId);
+[~, sortIdx] = sort(conSimMat(trueImgId, otherImgIds), 'descend');
+proxImgIds   = otherImgIds(sortIdx(1 : conProxK));
+tf = ismember(chosenImgId, proxImgIds);
+end
+
+function tf = isLocConfusable(pX, pY, trueSlot, chosenSlot, proxThresh)
+% True if the chosen display slot is within proxThresh angular distance of the
+% true slot on the 8-position circle (same logic used for FA_lure_clean_).
+theta_true   = atan2(pY(trueSlot), pX(trueSlot));
+theta_chosen = atan2(pY(chosenSlot), pX(chosenSlot));
+arc = mod(theta_chosen - theta_true, 2 * pi);
+arc = min(arc, 2 * pi - arc);
+tf = arc < proxThresh;
+end
 
